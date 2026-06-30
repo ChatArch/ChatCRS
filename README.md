@@ -45,3 +45,30 @@ python -m build
 ## 开发说明
 
 扩展脚手架前，先阅读 `DEVELOP.md` 和 `AGENTS.md`。
+
+## Read-only CRS management helpers
+
+ChatCRS includes read-only / plan-only commands for inspecting a CRS migration without mutating services or Nginx:
+
+```bash
+chatcrs inspect --json-output
+chatcrs verify sidecar --json-output
+chatcrs nginx plan-cutover --json-output
+chatcrs cutover precheck --json-output
+```
+
+These commands are intentionally safe by default:
+
+- they do not edit Nginx;
+- they do not reload Nginx;
+- they do not stop CRS services;
+- they return structured output suitable for ChatUp or Python callers.
+
+The core logic is also available as importable Python functions:
+
+```python
+from chatcrs.inspect import inspect_crs_layout
+from chatcrs.verify import verify_sidecar
+from chatcrs.nginx import plan_nginx_cutover
+from chatcrs.cutover import formal_single_active_precheck
+```
