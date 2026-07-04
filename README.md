@@ -22,6 +22,8 @@ ChatCRS package scaffold.
 pip install -e ".[dev]"
 chatcrs --help
 chatcrs --version
+chatcrs health --base-url http://127.0.0.1:12392 --json-output
+chatcrs local verify --base-url http://127.0.0.1:12392 --secrets-file ~/.chatarch/crs/local/.local-secrets.env --json-output
 python -m pytest -q
 python -m build
 ```
@@ -45,6 +47,17 @@ python -m build
 ## 开发说明
 
 扩展脚手架前，先阅读 `DEVELOP.md` 和 `AGENTS.md`。
+
+## Local CRS verification
+
+ChatCRS can verify a local CRS instance installed by ChatUp:
+
+```bash
+chatcrs health --base-url http://127.0.0.1:12392 --json-output
+chatcrs local verify --base-url http://127.0.0.1:12392 --secrets-file ~/.chatarch/crs/local/.local-secrets.env --json-output
+```
+
+`health` verifies `/health`. `local verify` additionally checks the admin SPA route, root redirect, auth-protected API route, and optional admin login using a local secrets file. Secret values are redacted from command output.
 
 ## Read-only CRS management helpers
 
