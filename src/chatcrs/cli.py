@@ -97,6 +97,72 @@ def verify_sidecar_command(json_output: bool) -> None:
         click.echo(f"ok={payload['ok']} mutated={payload['mutated']}")
 
 
+@verify_group.command(name="images")
+@click.option("--base-url", default=None, help="CRS root URL. Defaults to CHATCRS_BASE_URL or local CRS.")
+@click.option(
+    "--openai-env-file",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Env file containing OPENAI_API_KEY. Defaults to CHATCRS_OPENAI_ENV_FILE or the active ChatEnv OpenAI profile.",
+)
+@click.option("--regular-model", default="gpt-5.5", show_default=True)
+@click.option("--image-model", default="gpt-image-2", show_default=True)
+@click.option(
+    "--prompt",
+    default="A single orange triangle on a pale blue grid, minimalist icon, no text.",
+    show_default=True,
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=Path("chatcrs-image-acceptance.png"),
+    show_default=True,
+)
+@click.option(
+    "--execute-image",
+    is_flag=True,
+    default=False,
+    help="Perform the billable Images request and write the PNG. Without this flag only key and regular-model gates run.",
+)
+@click.option("--timeout", "timeout_seconds", type=float, default=600.0, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def verify_images_command(
+    base_url: str | None,
+    openai_env_file: Path | None,
+    regular_model: str,
+    image_model: str,
+    prompt: str,
+    output_path: Path,
+    execute_image: bool,
+    timeout_seconds: float,
+    json_output: bool,
+) -> None:
+    """Verify CRS API-key routing, optionally including real image generation."""
+
+    try:
+        payload = local_management.verify_images_api(
+            base_url=base_url,
+            openai_env_file=openai_env_file,
+            regular_model=regular_model,
+            image_model=image_model,
+            prompt=prompt,
+            output_path=output_path,
+            execute_image=execute_image,
+            timeout_seconds=timeout_seconds,
+        )
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} key={payload['key_info']['ok']} "
+            f"regular={payload['regular_model']['ok']} image={payload['image']['ok']} "
+            f"executed={payload['image']['executed']} mutated={payload['mutated']}"
+        )
+
+
 @main.group(name="nginx")
 def nginx_group() -> None:
     """Plan Nginx CRS routing changes."""

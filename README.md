@@ -77,6 +77,30 @@ These commands are intentionally safe by default:
 - they do not stop CRS services;
 - they return structured output suitable for ChatUp or Python callers.
 
+## CRS API-key Images 验收
+
+`verify images` 按阶段验证 CRS API key。默认只执行 `key-info` 和普通 `gpt-5.5` Responses 请求，不调用图片接口：
+
+```bash
+chatcrs verify images \
+  --base-url http://127.0.0.1:12392 \
+  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
+  --json-output
+```
+
+确认前两阶段通过后，显式添加 `--execute-image` 才会调用 `gpt-image-2`、消耗图片额度并写入 PNG：
+
+```bash
+chatcrs verify images \
+  --base-url http://127.0.0.1:12392 \
+  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
+  --execute-image \
+  --output ./chatcrs-image-acceptance.png \
+  --json-output
+```
+
+API key 只从 env 文件读取，命令参数和输出中不会出现 key 值。未传 `--openai-env-file` 时，依次读取 `CHATCRS_OPENAI_ENV_FILE` 或 `~/.chatarch/envs/OpenAI/.env`。JSON 中 `mutated=false` 表示仅完成 key/普通模型预检；执行真实图片请求后为 `mutated=true`。
+
 The core logic is also available as importable Python functions:
 
 ```python
@@ -84,4 +108,5 @@ from chatcrs.inspect import inspect_crs_layout
 from chatcrs.verify import verify_sidecar
 from chatcrs.nginx import plan_nginx_cutover
 from chatcrs.cutover import formal_single_active_precheck
+from chatcrs.local import verify_images_api
 ```

@@ -45,3 +45,27 @@ This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. 
 ## Development Notes
 
 See `DEVELOP.md` and `AGENTS.md` before expanding the scaffold.
+
+## CRS API-key Images acceptance
+
+`verify images` runs staged CRS API-key verification. By default it only calls `key-info` and a regular `gpt-5.5` Responses request; it does not generate an image:
+
+```bash
+chatcrs verify images \
+  --base-url http://127.0.0.1:12392 \
+  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
+  --json-output
+```
+
+After the first two gates pass, add `--execute-image` explicitly to call `gpt-image-2`, consume image quota, and write a PNG:
+
+```bash
+chatcrs verify images \
+  --base-url http://127.0.0.1:12392 \
+  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
+  --execute-image \
+  --output ./chatcrs-image-acceptance.png \
+  --json-output
+```
+
+The API key is read only from the env file and is never included in CLI arguments or output. Without `--openai-env-file`, ChatCRS checks `CHATCRS_OPENAI_ENV_FILE` and then `~/.chatarch/envs/OpenAI/.env`. JSON reports `mutated=false` for key/regular-model preflight and `mutated=true` after a real Images request.
