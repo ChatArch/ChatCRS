@@ -1,0 +1,43 @@
+site_name: ChatCRS
+site_description: Safe CRS inspection, debug management, and acceptance tooling
+site_url: https://chatarch.github.io/ChatCRS/
+repo_url: https://github.com/ChatArch/ChatCRS
+repo_name: ChatArch/ChatCRS
+
+nav:
+  - 首页: index.md
+  - CLI 命令树: cli.md
+  - 调试服务管理: debug-service.md
+  - 配置与目标: configuration.md
+  - Images 验收: images-acceptance.md
+  - 生产维护: production-maintenance.md
+  - 开发与发布: development.md
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    primary: blue grey
+    accent: orange
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+strict: true

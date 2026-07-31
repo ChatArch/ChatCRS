@@ -34,5 +34,16 @@ class ChatcrsConfig(BaseEnvConfig):
         is_sensitive=True,
     )
 
+    CHATCRS_OPENAI_ENV_FILE = EnvField(
+        "CHATCRS_OPENAI_ENV_FILE",
+        desc="Path to an env file containing the CRS OpenAI API key",
+        is_sensitive=True,
+    )
+
+    CHATCRS_AUDIT_DIR = EnvField(
+        "CHATCRS_AUDIT_DIR",
+        desc="Directory for safe ChatCRS mutation audit records and backups",
+    )
+
 
 __all__ = ["ChatcrsConfig"]

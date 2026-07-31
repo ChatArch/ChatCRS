@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+import chatcrs.debug as debug_management
 import chatcrs.local as local_management
 from chatcrs import __version__
 from chatcrs.cutover import formal_single_active_precheck
@@ -66,6 +67,160 @@ def local_verify_command(base_url: str | None, secrets_file: Path | None, json_o
         _echo_json(payload)
     else:
         click.echo(f"ok={payload['ok']} base_url={payload['base_url']} mutated={payload['mutated']}")
+
+
+@main.group(name="debug")
+def debug_group() -> None:
+    """Manage only the isolated CRS debug service on port 12392."""
+
+
+@debug_group.command(name="status")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_status_command(json_output: bool) -> None:
+    """Inspect debug health, tmux, Redis, Git, and safe settings."""
+
+    payload = debug_management.debug_status()
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} health={payload['health']['status']} "
+            f"tmux={payload['tmux']['active']} redis={payload['redis']['ping']} "
+            f"mutated={payload['mutated']}"
+        )
+
+
+@debug_group.command(name="logs")
+@click.option("--lines", type=click.IntRange(1, 2000), default=100, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_logs_command(lines: int, json_output: bool) -> None:
+    """Read redacted tail lines from the debug service log."""
+
+    try:
+        payload = debug_management.debug_logs(lines)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo("\n".join(payload.get("lines", [])))
+
+
+@debug_group.command(name="restart")
+@click.option(
+    "--execute",
+    is_flag=True,
+    default=False,
+    help="Restart only tmux session crs-debug-12392. Without this flag, print a plan.",
+)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+@click.pass_context
+def debug_restart_command(ctx: click.Context, execute: bool, json_output: bool) -> None:
+    """Plan or execute a guarded debug-only restart."""
+
+    try:
+        payload = debug_management.restart_debug(execute=execute)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} mode={payload['mode']} "
+            f"mutated={payload['mutated']} target={payload['target']}"
+        )
+    if execute and not payload["ok"]:
+        ctx.exit(1)
+
+
+@debug_group.group(name="settings")
+def debug_settings_group() -> None:
+    """Show or update a whitelist of non-secret debug settings."""
+
+
+@debug_settings_group.command(name="show")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_settings_show_command(json_output: bool) -> None:
+    """Show non-secret debug settings and protected isolation keys."""
+
+    payload = debug_management.show_debug_settings()
+    if json_output:
+        _echo_json(payload)
+    else:
+        for key, value in payload["settings"].items():
+            click.echo(f"{key}={value}")
+
+
+@debug_settings_group.command(name="set")
+@click.argument("key")
+@click.argument("value")
+@click.option(
+    "--execute",
+    is_flag=True,
+    default=False,
+    help="Write the debug .env and restart only debug. Without this flag, print a plan.",
+)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_settings_set_command(key: str, value: str, execute: bool, json_output: bool) -> None:
+    """Plan or apply one whitelisted setting to debug only."""
+
+    try:
+        payload = debug_management.set_debug_setting(key.upper(), value, execute=execute)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} mode={payload['mode']} changed={payload['changed']} "
+            f"mutated={payload['mutated']} setting={payload['setting']}"
+        )
+
+
+@debug_group.group(name="upgrade")
+def debug_upgrade_group() -> None:
+    """Plan or apply an exact ChatArch dev upgrade to debug only."""
+
+
+@debug_upgrade_group.command(name="plan")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_upgrade_plan_command(json_output: bool) -> None:
+    """Compare the debug checkout with remote ChatArch dev without mutation."""
+
+    payload = debug_management.upgrade_plan()
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} current={payload['current']['sha']} "
+            f"remote_dev={payload['dev']['remote_sha']} "
+            f"already_target_tree={payload['already_target_tree']} mutated={payload['mutated']}"
+        )
+
+
+@debug_upgrade_group.command(name="apply")
+@click.option("--expected-sha", default=None, help="Reviewed 40-character remote dev SHA.")
+@click.option(
+    "--execute",
+    is_flag=True,
+    default=False,
+    help="Apply the exact upgrade to debug. Without this flag, return the upgrade plan.",
+)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def debug_upgrade_apply_command(expected_sha: str | None, execute: bool, json_output: bool) -> None:
+    """Plan or execute a guarded debug-only upgrade."""
+
+    try:
+        payload = debug_management.apply_debug_upgrade(expected_sha, execute=execute)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} mode={payload['mode']} "
+            f"mutated={payload['mutated']} already_target_tree={payload['already_target_tree']}"
+        )
 
 
 @main.command(name="inspect")

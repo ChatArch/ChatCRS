@@ -29,6 +29,7 @@ chatcrs = "chatcrs.config"
 
 [project.optional-dependencies]
 dev = ["build", "pytest", "twine"]
+docs = ["mkdocs-material>=9.5,<10"]
 
 [tool.setuptools.dynamic]
 version = {attr = "chatcrs.__version__"}

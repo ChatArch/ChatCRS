@@ -14,54 +14,88 @@
 
 # ChatCRS
 
-ChatCRS package scaffold.
+ChatCRS 是 ChatArch 的 CRS 运维与验收 CLI，提供只读拓扑检查、API-key/Images 验收、Nginx 切流规划，以及固定隔离边界的 debug runtime 管理。
 
-## 快速开始
+## 安装与开发
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install -e '.[dev,docs]'
 chatcrs --help
 chatcrs --version
-chatcrs health --base-url http://127.0.0.1:12392 --json-output
-chatcrs local verify --base-url http://127.0.0.1:12392 --secrets-file ~/.chatarch/crs/local/.local-secrets.env --json-output
 python -m pytest -q
+python -m mkdocs build --strict
 python -m build
 ```
 
-## CLI 规范
-
-这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新的命令应优先使用：
-
-- `CommandSchema` / `CommandField` 描述输入。
-- `add_interactive_option()` 提供统一 `-i/-I`。
-- `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
-- 默认生成 `config.py` 和 `chatenv.configs` entry point，使包可被 ChatEnv 发现；只有明确不需要 ChatEnv 接入时才使用 `--without-chatenv-provider`。
-
-## 目录结构
-
-- `src/`：包源码
-- `tests/code-tests/`：代码测试和历史测试迁移
-- `tests/cli-tests/`：真实 CLI 测试，doc-first
-- `tests/mock-cli-tests/`：mock/fake CLI 测试，doc-first
-
-## 开发说明
-
-扩展脚手架前，先阅读 `DEVELOP.md` 和 `AGENTS.md`。
-
-## Local CRS verification
-
-ChatCRS can verify a local CRS instance installed by ChatUp:
+完整文档使用 MkDocs：
 
 ```bash
-chatcrs health --base-url http://127.0.0.1:12392 --json-output
-chatcrs local verify --base-url http://127.0.0.1:12392 --secrets-file ~/.chatarch/crs/local/.local-secrets.env --json-output
+python -m mkdocs serve
 ```
 
-`health` verifies `/health`. `local verify` additionally checks the admin SPA route, root redirect, auth-protected API route, and optional admin login using a local secrets file. Secret values are redacted from command output.
+## CLI 树
 
-## Read-only CRS management helpers
+```text
+chatcrs
+├── health
+├── inspect
+├── local verify
+├── verify sidecar
+├── verify images
+├── nginx plan-cutover
+├── cutover precheck
+└── debug
+    ├── status
+    ├── logs
+    ├── restart
+    ├── settings show / set
+    └── upgrade plan / apply
+```
 
-ChatCRS includes read-only / plan-only commands for inspecting a CRS migration without mutating services or Nginx:
+## 调试服务管理
+
+`chatcrs debug` 固定管理：
+
+- `/home/zhihong/claude-relay-service-independent/app`
+- `127.0.0.1:12392`
+- Redis `127.0.0.1:6382 DB0`
+- tmux `crs-debug-12392`
+
+查看状态：
+
+```bash
+chatcrs debug status --json-output
+chatcrs debug logs --lines 100
+chatcrs debug settings show --json-output
+chatcrs debug upgrade plan --json-output
+```
+
+Restart/settings/upgrade 默认只返回计划。真正执行必须显式加 `--execute`；settings/upgrade 会备份并在失败时恢复。
+
+```bash
+chatcrs debug restart --execute --json-output
+chatcrs debug settings set LOG_LEVEL info --execute --json-output
+chatcrs debug upgrade apply --expected-sha <40-char-sha> --execute --json-output
+```
+
+隔离字段 `HOST`、`PORT`、`REDIS_*`、JWT 和加密密钥不能由 settings 修改。Debug 写操作不接受自定义 app/port，因此不能改去操作生产。
+
+## Images 验收
+
+默认只验证 key-info 和普通 `gpt-5.5`，不生成图片：
+
+```bash
+chatcrs verify images \
+  --base-url http://127.0.0.1:12392 \
+  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
+  --json-output
+```
+
+只有显式添加 `--execute-image` 才调用图片接口并写 PNG。
+
+## 生产安全
+
+以下命令是只读/plan-only：
 
 ```bash
 chatcrs inspect --json-output
@@ -70,43 +104,10 @@ chatcrs nginx plan-cutover --json-output
 chatcrs cutover precheck --json-output
 ```
 
-These commands are intentionally safe by default:
+ChatCRS 当前不直接执行生产切流。生产更新继续使用经过审核、默认 dry-run 的独立 release/cutover 流程。
 
-- they do not edit Nginx;
-- they do not reload Nginx;
-- they do not stop CRS services;
-- they return structured output suitable for ChatUp or Python callers.
+更多内容见 `docs/`，尤其是：
 
-## CRS API-key Images 验收
-
-`verify images` 按阶段验证 CRS API key。默认只执行 `key-info` 和普通 `gpt-5.5` Responses 请求，不调用图片接口：
-
-```bash
-chatcrs verify images \
-  --base-url http://127.0.0.1:12392 \
-  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
-  --json-output
-```
-
-确认前两阶段通过后，显式添加 `--execute-image` 才会调用 `gpt-image-2`、消耗图片额度并写入 PNG：
-
-```bash
-chatcrs verify images \
-  --base-url http://127.0.0.1:12392 \
-  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
-  --execute-image \
-  --output ./chatcrs-image-acceptance.png \
-  --json-output
-```
-
-API key 只从 env 文件读取，命令参数和输出中不会出现 key 值。未传 `--openai-env-file` 时，依次读取 `CHATCRS_OPENAI_ENV_FILE` 或 `~/.chatarch/envs/OpenAI/.env`。JSON 中 `mutated=false` 表示仅完成 key/普通模型预检；执行真实图片请求后为 `mutated=true`。
-
-The core logic is also available as importable Python functions:
-
-```python
-from chatcrs.inspect import inspect_crs_layout
-from chatcrs.verify import verify_sidecar
-from chatcrs.nginx import plan_nginx_cutover
-from chatcrs.cutover import formal_single_active_precheck
-from chatcrs.local import verify_images_api
-```
+- `docs/cli.md`
+- `docs/debug-service.md`
+- `docs/production-maintenance.md`
