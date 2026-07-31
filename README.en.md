@@ -14,41 +14,81 @@
 
 # ChatCRS
 
-ChatCRS package scaffold.
+ChatCRS is ChatArch's CRS operations and acceptance CLI. It provides read-only
+topology inspection, API-key/Images verification, Nginx cutover planning, and
+guarded management of the isolated debug runtime.
 
-## Quick Start
+## Install and develop
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install -e '.[dev,docs]'
 chatcrs --help
 chatcrs --version
 python -m pytest -q
+python -m mkdocs build --strict
 python -m build
 ```
 
-## CLI Contract
+Serve the complete MkDocs site with:
 
-This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. New commands should prefer:
+```bash
+python -m mkdocs serve
+```
 
-- `CommandSchema` / `CommandField` for inputs.
-- `add_interactive_option()` for the shared `-i/-I` switch.
-- `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
-- Generate `config.py` and a `chatenv.configs` entry point by default so the package is ChatEnv-discoverable; use `--without-chatenv-provider` only when ChatEnv integration is intentionally not needed.
+## CLI tree
 
-## Layout
+```text
+chatcrs
+├── health
+├── inspect
+├── local verify
+├── verify sidecar
+├── verify images
+├── nginx plan-cutover
+├── cutover precheck
+└── debug
+    ├── status
+    ├── logs
+    ├── restart
+    ├── settings show / set
+    └── upgrade plan / apply
+```
 
-- `src/`: package source code
-- `tests/code-tests/`: code tests and migrated historical tests
-- `tests/cli-tests/`: real CLI tests, doc-first
-- `tests/mock-cli-tests/`: mock/fake CLI tests, doc-first
+## Debug runtime management
 
-## Development Notes
+`chatcrs debug` is hard-bound to:
 
-See `DEVELOP.md` and `AGENTS.md` before expanding the scaffold.
+- `/home/zhihong/claude-relay-service-independent/app`
+- `127.0.0.1:12392`
+- Redis `127.0.0.1:6382 DB0`
+- tmux session `crs-debug-12392`
 
-## CRS API-key Images acceptance
+Read-only commands:
 
-`verify images` runs staged CRS API-key verification. By default it only calls `key-info` and a regular `gpt-5.5` Responses request; it does not generate an image:
+```bash
+chatcrs debug status --json-output
+chatcrs debug logs --lines 100
+chatcrs debug settings show --json-output
+chatcrs debug upgrade plan --json-output
+```
+
+Restart, setting changes, and upgrades are dry-run by default. Mutation requires
+`--execute`; settings/upgrades create backups and recover on failure.
+
+```bash
+chatcrs debug restart --execute --json-output
+chatcrs debug settings set LOG_LEVEL info --execute --json-output
+chatcrs debug upgrade apply --expected-sha <40-char-sha> --execute --json-output
+```
+
+Isolation settings (`HOST`, `PORT`, `REDIS_*`, JWT, and encryption keys) cannot
+be changed through the settings command. Debug mutation commands accept no
+custom app or port, so they cannot be redirected to production.
+
+## Images acceptance
+
+The default flow verifies key-info and a regular `gpt-5.5` request without
+creating an image:
 
 ```bash
 chatcrs verify images \
@@ -57,15 +97,21 @@ chatcrs verify images \
   --json-output
 ```
 
-After the first two gates pass, add `--execute-image` explicitly to call `gpt-image-2`, consume image quota, and write a PNG:
+Only `--execute-image` invokes the image endpoint and writes a PNG.
+
+## Production safety
+
+These commands are read-only or plan-only:
 
 ```bash
-chatcrs verify images \
-  --base-url http://127.0.0.1:12392 \
-  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
-  --execute-image \
-  --output ./chatcrs-image-acceptance.png \
-  --json-output
+chatcrs inspect --json-output
+chatcrs verify sidecar --json-output
+chatcrs nginx plan-cutover --json-output
+chatcrs cutover precheck --json-output
 ```
 
-The API key is read only from the env file and is never included in CLI arguments or output. Without `--openai-env-file`, ChatCRS checks `CHATCRS_OPENAI_ENV_FILE` and then `~/.chatarch/envs/OpenAI/.env`. JSON reports `mutated=false` for key/regular-model preflight and `mutated=true` after a real Images request.
+ChatCRS does not currently execute production cutovers. Production updates remain
+in the reviewed, dry-run-by-default release/cutover workflow.
+
+See `docs/cli.md`, `docs/debug-service.md`, and
+`docs/production-maintenance.md` for details.

@@ -1,0 +1,4 @@
+include CHANGELOG.md
+include README.en.md
+include mkdocs.yml
+recursive-include docs *.md
