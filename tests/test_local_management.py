@@ -1,3 +1,4 @@
+import base64
 import json
 
 from click.testing import CliRunner
@@ -71,3 +72,97 @@ def test_load_local_secrets_redacts_password(tmp_path):
     assert loaded["ADMIN_PASSWORD"] == "secret"
     assert "secret" not in loaded["_redacted"]
     assert loaded["_redacted"]["ADMIN_PASSWORD"] == "[REDACTED]"
+
+
+def test_verify_images_preflight_checks_key_and_regular_model(monkeypatch, tmp_path):
+    import chatcrs.local as local
+
+    env_file = tmp_path / "openai.env"
+    env_file.write_text("OPENAI_API_KEY='secret-crs-key'\n", encoding="utf-8")
+    calls = []
+
+    def fake_request(base_url, path, **kwargs):
+        calls.append((base_url, path, kwargs))
+        assert kwargs["headers"]["authorization"] == "Bearer secret-crs-key"
+        if path == "/openai/key-info":
+            return 200, json.dumps({"name": "image-test", "permissions": ["openai"]}).encode()
+        if path == "/openai/v1/responses":
+            return 200, b'data: {"text":"CHATCRS_KEY_OK"}\n\n'
+        raise AssertionError(path)
+
+    monkeypatch.setattr(local, "_request_status", fake_request)
+
+    payload = local.verify_images_api(
+        base_url="http://127.0.0.1:12392",
+        openai_env_file=env_file,
+    )
+
+    assert payload["ok"] is True
+    assert payload["mutated"] is False
+    assert payload["api_key"] == "[REDACTED]"
+    assert payload["key_info"]["name"] == "image-test"
+    assert payload["regular_model"]["expected_marker"] is True
+    assert payload["image"]["executed"] is False
+    assert [path for _, path, _ in calls] == ["/openai/key-info", "/openai/v1/responses"]
+
+
+def test_verify_images_execute_writes_valid_png(monkeypatch, tmp_path):
+    import chatcrs.local as local
+
+    env_file = tmp_path / "openai.env"
+    env_file.write_text("OPENAI_API_KEY=secret-crs-key\n", encoding="utf-8")
+    output = tmp_path / "result.png"
+    png = b"\x89PNG\r\n\x1a\n" + b"image-bytes"
+
+    def fake_request(base_url, path, **kwargs):
+        if path == "/openai/key-info":
+            return 200, b'{"name":"image-test","permissions":["openai"]}'
+        if path == "/openai/v1/responses":
+            return 200, b"data: CHATCRS_KEY_OK\n\n"
+        if path == "/openai/v1/images/generations":
+            body = {"data": [{"b64_json": base64.b64encode(png).decode()}]}
+            return 200, json.dumps(body).encode()
+        raise AssertionError(path)
+
+    monkeypatch.setattr(local, "_request_status", fake_request)
+
+    payload = local.verify_images_api(
+        openai_env_file=env_file,
+        output_path=output,
+        execute_image=True,
+    )
+
+    assert payload["ok"] is True
+    assert payload["mutated"] is True
+    assert payload["image"]["executed"] is True
+    assert payload["image"]["png"] is True
+    assert output.read_bytes() == png
+
+
+def test_verify_images_cli_is_gated_and_redacted(monkeypatch, tmp_path):
+    import chatcrs.local as local
+
+    env_file = tmp_path / "openai.env"
+    env_file.write_text("OPENAI_API_KEY=secret-crs-key\n", encoding="utf-8")
+
+    def fake_verify(**kwargs):
+        assert kwargs["execute_image"] is False
+        assert kwargs["openai_env_file"] == env_file
+        return {
+            "ok": True,
+            "mutated": False,
+            "api_key": "[REDACTED]",
+            "key_info": {"ok": True},
+            "regular_model": {"ok": True},
+            "image": {"ok": None, "executed": False},
+        }
+
+    monkeypatch.setattr(local, "verify_images_api", fake_verify)
+    result = CliRunner().invoke(
+        main,
+        ["verify", "images", "--openai-env-file", str(env_file), "--json-output"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "secret-crs-key" not in result.output
+    assert json.loads(result.output)["api_key"] == "[REDACTED]"
