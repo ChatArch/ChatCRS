@@ -15,7 +15,8 @@
 # ChatCRS
 
 ChatCRS is ChatArch's CRS operations and acceptance CLI. It provides read-only
-topology inspection, API-key/Images verification, Nginx cutover planning, and
+topology inspection, remote CRS admin/API-key inspection, guarded CRS service
+lifecycle management, API-key/Images verification, Nginx cutover planning, and
 guarded management of the isolated debug runtime.
 
 ## Install and develop
@@ -44,6 +45,12 @@ chatcrs
 ├── local verify
 ├── verify sidecar
 ├── verify images
+├── admin login
+├── admin accounts usage / refresh-status
+├── admin keys list / show
+├── key info
+├── service install / update / start / stop / restart
+├── service status / switch-branch / update-pricing
 ├── nginx plan-cutover
 ├── cutover precheck
 └── debug
@@ -101,14 +108,17 @@ Only `--execute-image` invokes the image endpoint and writes a PNG.
 
 ## Production safety
 
-These commands are read-only or plan-only:
+These commands are read-only or plan-only by default:
 
 ```bash
 chatcrs inspect --json-output
 chatcrs verify sidecar --json-output
 chatcrs nginx plan-cutover --json-output
 chatcrs cutover precheck --json-output
+chatcrs service update --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --json-output
 ```
+
+`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` absorbs the official `crs` management semantics. It prints a remote execution plan by default; only `--execute` runs the official `crs ...` command through SSH in the target app directory. Captured stdout/stderr are redacted before rendering.
 
 ChatCRS does not currently execute production cutovers. Production updates remain
 in the reviewed, dry-run-by-default release/cutover workflow.

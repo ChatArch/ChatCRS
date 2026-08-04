@@ -10,6 +10,7 @@ SENSITIVE_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 GITHUB_TOKEN_RE = re.compile(r"gh[pousr]_[A-Za-z0-9_]{12,}")
+CRS_API_KEY_RE = re.compile(r"cr_[A-Za-z0-9_\-]{8,}")
 AUTH_RE = re.compile(r"(?i)(authorization:\s*(?:bearer|basic)\s+)[^\s,;]+")
 ASSIGNMENT_RE = re.compile(
     r"(?i)((?:token|secret|password|passwd|api[_-]?key|credential|jwt|encryption|refresh)[A-Z0-9_\-]*\s*[=:]\s*)[^\s,'\"]+"
@@ -31,6 +32,7 @@ def redact(value: Any) -> Any:
     if isinstance(value, str):
         masked = AUTH_RE.sub(r"\1[REDACTED]", value)
         masked = GITHUB_TOKEN_RE.sub("[REDACTED]", masked)
+        masked = CRS_API_KEY_RE.sub("[REDACTED]", masked)
         masked = ASSIGNMENT_RE.sub(r"\1[REDACTED]", masked)
         return masked
     return value
