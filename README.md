@@ -14,7 +14,7 @@
 
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS 运维与验收 CLI，提供只读拓扑检查、API-key/Images 验收、Nginx 切流规划，以及固定隔离边界的 debug runtime 管理。
+ChatCRS 是 ChatArch 的 CRS 运维与验收 CLI，提供只读拓扑检查、远程 CRS 管理员/API-key 查询、API-key/Images 验收、Nginx 切流规划，以及固定隔离边界的 debug runtime 管理。
 
 ## 安装与开发
 
@@ -42,6 +42,10 @@ chatcrs
 ├── local verify
 ├── verify sidecar
 ├── verify images
+├── admin login
+├── admin accounts usage / refresh-status
+├── admin keys list / show
+├── key info
 ├── nginx plan-cutover
 ├── cutover precheck
 └── debug

@@ -15,8 +15,9 @@
 # ChatCRS
 
 ChatCRS is ChatArch's CRS operations and acceptance CLI. It provides read-only
-topology inspection, API-key/Images verification, Nginx cutover planning, and
-guarded management of the isolated debug runtime.
+topology inspection, remote CRS admin/API-key inspection, API-key/Images
+verification, Nginx cutover planning, and guarded management of the isolated
+debug runtime.
 
 ## Install and develop
 
@@ -44,6 +45,10 @@ chatcrs
 ├── local verify
 ├── verify sidecar
 ├── verify images
+├── admin login
+├── admin accounts usage / refresh-status
+├── admin keys list / show
+├── key info
 ├── nginx plan-cutover
 ├── cutover precheck
 └── debug
