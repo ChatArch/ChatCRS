@@ -21,6 +21,15 @@ chatcrs
 │       └── show
 ├── key
 │   └── info
+├── service
+│   ├── install
+│   ├── update
+│   ├── start
+│   ├── stop
+│   ├── restart
+│   ├── status
+│   ├── switch-branch
+│   └── update-pricing
 ├── nginx
 │   └── plan-cutover
 ├── cutover
@@ -149,6 +158,64 @@ chatcrs key info --json-output
 ```bash
 chatcrs key info --path /api/v1/key-info --json-output
 ```
+
+## Service 生命周期命令
+
+`chatcrs service` 吸收官方 `/usr/bin/crs` 的机械生命周期入口，用作模型和人类共同调用的远程管理工具。实现上通过 SSH 在目标 CRS app 目录执行官方 `crs ...`，但默认只输出计划；`install/update/start/stop/restart/switch-branch/update-pricing` 只有显式 `--execute` 才会实际变更远端服务或代码。
+
+通用参数：
+
+```bash
+chatcrs service <command> --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --json-output
+chatcrs service <command> --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --execute --json-output
+```
+
+支持环境变量默认值：
+
+```text
+CHATCRS_SSH_ALIAS   # 例如 tencent.am
+CHATCRS_APP_DIR     # 例如 /home/zhihong/claude-relay-service/app
+CHATCRS_CRS_COMMAND # 例如 /usr/bin/crs，默认 crs
+```
+
+### `service install`
+
+计划或执行官方 `crs install`。
+
+### `service update`
+
+计划或执行官方 `crs update`。
+
+### `service start`
+
+计划或执行官方 `crs start`。
+
+### `service stop`
+
+计划或执行官方 `crs stop`。这是生产影响动作，默认 dry-run。
+
+### `service restart`
+
+计划或执行官方 `crs restart`。
+
+### `service status`
+
+计划或执行官方 `crs status`。
+
+### `service switch-branch`
+
+计划或执行官方 `crs switch-branch <branch>`。
+
+```bash
+chatcrs service switch-branch dev --ssh-alias tencent.am --json-output
+chatcrs service switch-branch dev --ssh-alias tencent.am --execute --json-output
+```
+
+### `service update-pricing`
+
+计划或执行官方 `crs update-pricing`。
+
+命令输出会脱敏 stdout/stderr 中的 Authorization、token、API key 等敏感片段。
 
 ## 生产/调试安全边界
 

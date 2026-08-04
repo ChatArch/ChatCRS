@@ -14,7 +14,7 @@
 
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS 运维与验收 CLI，提供只读拓扑检查、远程 CRS 管理员/API-key 查询、API-key/Images 验收、Nginx 切流规划，以及固定隔离边界的 debug runtime 管理。
+ChatCRS 是 ChatArch 的 CRS 运维与验收 CLI，提供只读拓扑检查、远程 CRS 管理员/API-key 查询、受控 CRS service 生命周期管理、API-key/Images 验收、Nginx 切流规划，以及固定隔离边界的 debug runtime 管理。
 
 ## 安装与开发
 
@@ -46,6 +46,8 @@ chatcrs
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
 ├── key info
+├── service install / update / start / stop / restart
+├── service status / switch-branch / update-pricing
 ├── nginx plan-cutover
 ├── cutover precheck
 └── debug
@@ -99,14 +101,17 @@ chatcrs verify images \
 
 ## 生产安全
 
-以下命令是只读/plan-only：
+以下命令默认是只读/plan-only：
 
 ```bash
 chatcrs inspect --json-output
 chatcrs verify sidecar --json-output
 chatcrs nginx plan-cutover --json-output
 chatcrs cutover precheck --json-output
+chatcrs service update --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --json-output
 ```
+
+`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` 吸收官方 `crs` 管理语义；默认只输出远程执行计划，只有显式 `--execute` 才通过 SSH 在目标 app 目录执行官方 `crs ...`。stdout/stderr 会做敏感信息脱敏。
 
 ChatCRS 当前不直接执行生产切流。生产更新继续使用经过审核、默认 dry-run 的独立 release/cutover 流程。
 

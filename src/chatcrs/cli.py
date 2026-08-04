@@ -10,6 +10,7 @@ import click
 import chatcrs.debug as debug_management
 import chatcrs.local as local_management
 import chatcrs.remote as remote_management
+import chatcrs.service as service_management
 from chatcrs import __version__
 from chatcrs.cutover import formal_single_active_precheck
 from chatcrs.inspect import inspect_crs_layout
@@ -592,6 +593,127 @@ def key_info_command(
         _echo_json(payload)
     else:
         click.echo(f"ok={payload['ok']} status={payload['status']} mutated={payload['mutated']}")
+
+
+def _service_target(
+    *,
+    ssh_alias: str | None,
+    app_dir: str | None,
+    crs_command: str | None,
+    timeout: float,
+) -> service_management.ServiceTarget:
+    return service_management.ServiceTarget.from_options(
+        ssh_alias=ssh_alias,
+        app_dir=app_dir,
+        crs_command=crs_command,
+        timeout=timeout,
+    )
+
+
+def _common_service_options(function):
+    function = click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")(function)
+    function = click.option(
+        "--execute",
+        is_flag=True,
+        default=False,
+        help="Actually run the official crs lifecycle command over SSH. Without it, print a guarded plan.",
+    )(function)
+    function = click.option("--timeout", type=float, default=120.0, show_default=True)(function)
+    function = click.option("--crs-command", default=None, help="Remote crs command path. Defaults to crs or CHATCRS_CRS_COMMAND.")(function)
+    function = click.option("--app-dir", default=None, help="Remote CRS app directory. Defaults to CHATCRS_APP_DIR or canonical app path.")(function)
+    function = click.option("--ssh-alias", default=None, help="SSH target alias. Defaults to CHATCRS_SSH_ALIAS.")(function)
+    return function
+
+
+def _emit_service_payload(payload: dict, *, json_output: bool) -> None:
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} action={payload['action']} mode={payload['mode']} "
+            f"mutated={payload['mutated']} command={' '.join(payload['official_crs_command'])}"
+        )
+
+
+@main.group(name="service")
+def service_group() -> None:
+    """Guarded CRS lifecycle commands absorbed from official crs."""
+
+
+def _service_action_command(action: str, *, branch: str | None, ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    target = _service_target(ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout)
+    try:
+        payload = service_management.run_service_action(action, target=target, branch=branch, execute=execute)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    _emit_service_payload(payload, json_output=json_output)
+    if execute and not payload.get("ok", False):
+        raise click.ClickException(f"crs {action} failed")
+
+
+@service_group.command(name="install")
+@_common_service_options
+def service_install_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs install` on a remote target."""
+
+    _service_action_command("install", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="update")
+@_common_service_options
+def service_update_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs update` on a remote target."""
+
+    _service_action_command("update", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="start")
+@_common_service_options
+def service_start_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs start` on a remote target."""
+
+    _service_action_command("start", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="stop")
+@_common_service_options
+def service_stop_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs stop` on a remote target."""
+
+    _service_action_command("stop", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="restart")
+@_common_service_options
+def service_restart_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs restart` on a remote target."""
+
+    _service_action_command("restart", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="status")
+@_common_service_options
+def service_status_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs status` on a remote target."""
+
+    _service_action_command("status", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="switch-branch")
+@_common_service_options
+@click.argument("branch")
+def service_switch_branch_command(branch: str, ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs switch-branch <branch>` on a remote target."""
+
+    _service_action_command("switch-branch", branch=branch, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="update-pricing")
+@_common_service_options
+def service_update_pricing_command(ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute official `crs update-pricing` on a remote target."""
+
+    _service_action_command("update-pricing", branch=None, ssh_alias=ssh_alias, app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
 
 
 @main.group(name="nginx")
