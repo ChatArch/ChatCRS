@@ -11,6 +11,11 @@
   management semantics for `install`, `update`, `start`, `stop`, `restart`,
   `status`, `switch-branch`, and `update-pricing`.
 - Document the complete implemented CLI tree with right-side command comments.
+- Align the MkDocs site with the ChatArch documentation pattern: card-based home
+  pages, i18n suffix pages, canonical ChatArch docs URL, and a segmented CLI
+  reference.
+- Add Preview Docs and Deploy Docs workflows for the ChatArch project-pages
+  documentation path.
 
 ### Changed
 
@@ -18,6 +23,8 @@
   runs the official `crs ...` command over SSH in the target app directory.
 - Redact captured service stdout/stderr, including Authorization headers and
   CRS API-key-shaped `cr_...` values.
+- Add a CLI-doc alignment test so every registered leaf command must appear in
+  both the Chinese and English CLI reference pages.
 - Bump package version to 0.2.1.
 
 ## 2026-08-04 - 0.2.0

@@ -36,6 +36,8 @@ Serve the complete MkDocs site with:
 python -m mkdocs serve
 ```
 
+Documentation: https://arch.gh.wzhecnu.cn/ChatCRS/
+
 ## CLI tree
 
 ```text

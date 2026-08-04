@@ -1,6 +1,6 @@
-site_name: ChatCRS
-site_description: Safe CRS inspection, debug management, and acceptance tooling
-site_url: https://chatarch.github.io/ChatCRS/
+site_name: ChatCRS 文档
+site_description: Safe CRS operations, remote admin inspection, lifecycle management, and acceptance tooling
+site_url: https://arch.gh.wzhecnu.cn/ChatCRS/
 repo_url: https://github.com/ChatArch/ChatCRS
 repo_name: ChatArch/ChatCRS
 
@@ -17,7 +17,6 @@ theme:
   name: material
   language: zh
   features:
-    - navigation.instant
     - navigation.sections
     - navigation.top
     - content.code.copy
@@ -27,10 +26,43 @@ theme:
 
 plugins:
   - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: zh
+          default: true
+          name: 中文
+          build: true
+          site_name: ChatCRS 文档
+        - locale: en
+          name: English
+          build: true
+          site_name: ChatCRS Documentation
+          nav_translations:
+            首页: Home
+            CLI 命令树: CLI Tree
+            调试服务管理: Debug Runtime
+            配置与目标: Configuration and Targets
+            Images 验收: Images Acceptance
+            生产维护: Production Maintenance
+            开发与发布: Development and Release
+
+extra:
+  alternate:
+    - name: 中文
+      link: /ChatCRS/
+      lang: zh
+    - name: English
+      link: /ChatCRS/en/
+      lang: en
 
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - def_list
   - tables
   - toc:

@@ -27,11 +27,13 @@ python -m mkdocs build --strict
 python -m build
 ```
 
-完整文档使用 MkDocs：
+完整文档使用 MkDocs，本地预览：
 
 ```bash
 python -m mkdocs serve
 ```
+
+线上文档：https://arch.gh.wzhecnu.cn/ChatCRS/
 
 ## CLI 树
 
