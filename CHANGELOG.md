@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased - 0.2.0
+## 2026-08-04 - 0.2.1
+
+### Added
+
+- Add remote CRS Admin/API-key inspection commands: `chatcrs admin login`,
+  `chatcrs admin accounts usage`, `chatcrs admin accounts refresh-status`,
+  `chatcrs admin keys list`, `chatcrs admin keys show`, and `chatcrs key info`.
+- Add guarded `chatcrs service` lifecycle commands that absorb official `crs`
+  management semantics for `install`, `update`, `start`, `stop`, `restart`,
+  `status`, `switch-branch`, and `update-pricing`.
+- Document the complete implemented CLI tree with right-side command comments.
+
+### Changed
+
+- Keep service lifecycle actions dry-run/plan-only by default; only `--execute`
+  runs the official `crs ...` command over SSH in the target app directory.
+- Redact captured service stdout/stderr, including Authorization headers and
+  CRS API-key-shaped `cr_...` values.
+- Bump package version to 0.2.1.
+
+## 2026-08-04 - 0.2.0
 
 ### Added
 
