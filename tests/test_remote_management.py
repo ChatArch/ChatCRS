@@ -9,7 +9,7 @@ from typing import Any
 from click.testing import CliRunner
 
 from chatcrs.cli import main
-from chatcrs.remote import load_crs_profile
+from chatcrs.remote import CrsApiError, CrsHttpClient, CrsProfile, load_crs_profile
 
 
 class FakeCrsHandler(BaseHTTPRequestHandler):
@@ -188,6 +188,26 @@ def test_load_crs_admin_profile_reads_crs_admin_env_without_exposing_values(tmp_
         "password_present": True,
         "admin_token_present": False,
     }
+
+
+def test_admin_login_failure_reports_status_and_safe_reason_without_secrets():
+    server, base_url = run_fake_crs()
+    try:
+        client = CrsHttpClient(CrsProfile(base_url=base_url, username="admin", password="wrong-secret"))
+
+        try:
+            client.login()
+        except CrsApiError as exc:
+            message = str(exc)
+        else:  # pragma: no cover - defensive failure clarity
+            raise AssertionError("login unexpectedly succeeded")
+
+        assert "CRS admin login failed" in message
+        assert "status=401" in message
+        assert "wrong-secret" not in message
+        assert FakeCrsHandler.admin_token not in message
+    finally:
+        server.shutdown()
 
 
 def test_remote_admin_cli_reports_accounts_usage_and_key_stats_without_secrets():

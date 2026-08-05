@@ -10,7 +10,12 @@
 - Add guarded `chatcrs service` lifecycle commands that absorb official `crs`
   management semantics for `install`, `update`, `start`, `stop`, `restart`,
   `status`, `switch-branch`, and `update-pricing`.
-- Document the complete implemented CLI tree with right-side command comments.
+- Document the current implemented CLI tree with right-side command comments.
+- Align the MkDocs site with the ChatArch documentation pattern: card-based home
+  pages, i18n suffix pages, canonical ChatArch docs URL, and a segmented CLI
+  reference.
+- Add Preview Docs and Deploy Docs workflows for the ChatArch project-pages
+  documentation path.
 
 ### Changed
 
@@ -18,6 +23,15 @@
   runs the official `crs ...` command over SSH in the target app directory.
 - Redact captured service stdout/stderr, including Authorization headers and
   CRS API-key-shaped `cr_...` values.
+- Add a CLI-doc alignment test so the registered leaf commands exactly match
+  the user-approved final command tree and stale operational commands stay out
+  of the Chinese and English CLI reference pages.
+- Remove legacy local verification, special acceptance, edge cutover, and debug
+  runtime operations from the registered package CLI surface; those workflows
+  move to task-specific runbooks and model-operated tooling.
+- Improve remote Admin API login failures so the CLI reports safe status/reason
+  details such as `status=401 reason=Invalid username or password` without
+  leaking credentials.
 - Bump package version to 0.2.1.
 
 ## 2026-08-04 - 0.2.0

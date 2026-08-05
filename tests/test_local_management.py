@@ -6,38 +6,6 @@ from click.testing import CliRunner
 from chatcrs.cli import main
 
 
-def test_local_verify_command_returns_json(monkeypatch, tmp_path):
-    import chatcrs.local as local
-
-    secrets = tmp_path / ".local-secrets.env"
-    secrets.write_text("ADMIN_USERNAME=admin\nADMIN_PASSWORD=secret\n", encoding="utf-8")
-
-    def fake_verify(*, base_url, secrets_file=None):
-        assert base_url == "http://127.0.0.1:12404"
-        assert secrets_file == secrets
-        return {"ok": True, "base_url": base_url, "mutated": False, "admin_login": {"status": 200}}
-
-    monkeypatch.setattr(local, "verify_local_crs", fake_verify)
-
-    result = CliRunner().invoke(
-        main,
-        [
-            "local",
-            "verify",
-            "--base-url",
-            "http://127.0.0.1:12404",
-            "--secrets-file",
-            str(secrets),
-            "--json-output",
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert payload["ok"] is True
-    assert payload["mutated"] is False
-    assert payload["admin_login"]["status"] == 200
-
 
 def test_health_command_uses_base_url_argument(monkeypatch):
     import chatcrs.local as local
@@ -137,32 +105,3 @@ def test_verify_images_execute_writes_valid_png(monkeypatch, tmp_path):
     assert payload["image"]["executed"] is True
     assert payload["image"]["png"] is True
     assert output.read_bytes() == png
-
-
-def test_verify_images_cli_is_gated_and_redacted(monkeypatch, tmp_path):
-    import chatcrs.local as local
-
-    env_file = tmp_path / "openai.env"
-    env_file.write_text("OPENAI_API_KEY=secret-crs-key\n", encoding="utf-8")
-
-    def fake_verify(**kwargs):
-        assert kwargs["execute_image"] is False
-        assert kwargs["openai_env_file"] == env_file
-        return {
-            "ok": True,
-            "mutated": False,
-            "api_key": "[REDACTED]",
-            "key_info": {"ok": True},
-            "regular_model": {"ok": True},
-            "image": {"ok": None, "executed": False},
-        }
-
-    monkeypatch.setattr(local, "verify_images_api", fake_verify)
-    result = CliRunner().invoke(
-        main,
-        ["verify", "images", "--openai-env-file", str(env_file), "--json-output"],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "secret-crs-key" not in result.output
-    assert json.loads(result.output)["api_key"] == "[REDACTED]"

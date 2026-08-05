@@ -14,10 +14,7 @@
 
 # ChatCRS
 
-ChatCRS is ChatArch's CRS operations and acceptance CLI. It provides read-only
-topology inspection, remote CRS admin/API-key inspection, guarded CRS service
-lifecycle management, API-key/Images verification, Nginx cutover planning, and
-guarded management of the isolated debug runtime.
+ChatCRS is ChatArch's remote CRS operations CLI. It provides remote CRS admin/API-key inspection, guarded CRS service lifecycle management, health, and read-only topology summaries. Web-edge work, formal switching, image capability acceptance, and isolated debug-runtime operations are not registered package commands; the model handles them from the active task runbook when needed.
 
 ## Install and develop
 
@@ -36,92 +33,50 @@ Serve the complete MkDocs site with:
 python -m mkdocs serve
 ```
 
+Documentation: https://arch.gh.wzhecnu.cn/ChatCRS/
+
 ## CLI tree
 
 ```text
 chatcrs
 ├── health
 ├── inspect
-├── local verify
-├── verify sidecar
-├── verify images
 ├── admin login
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
 ├── key info
 ├── service install / update / start / stop / restart
-├── service status / switch-branch / update-pricing
-├── nginx plan-cutover
-├── cutover precheck
-└── debug
-    ├── status
-    ├── logs
-    ├── restart
-    ├── settings show / set
-    └── upgrade plan / apply
+└── service status / switch-branch / update-pricing
 ```
 
-## Debug runtime management
-
-`chatcrs debug` is hard-bound to:
-
-- `/home/zhihong/claude-relay-service-independent/app`
-- `127.0.0.1:12392`
-- Redis `127.0.0.1:6382 DB0`
-- tmux session `crs-debug-12392`
-
-Read-only commands:
+## Remote admin and API key
 
 ```bash
-chatcrs debug status --json-output
-chatcrs debug logs --lines 100
-chatcrs debug settings show --json-output
-chatcrs debug upgrade plan --json-output
+chatcrs admin login --json-output
+chatcrs admin accounts usage --json-output
+chatcrs admin accounts refresh-status <account_id> --json-output
+chatcrs admin accounts refresh-status <account_id> --execute --json-output
+chatcrs admin keys list --include-stats --json-output
+chatcrs admin keys show <key_id_or_name> --json-output
+chatcrs key info --json-output
 ```
 
-Restart, setting changes, and upgrades are dry-run by default. Mutation requires
-`--execute`; settings/upgrades create backups and recover on failure.
+## Service lifecycle
 
 ```bash
-chatcrs debug restart --execute --json-output
-chatcrs debug settings set LOG_LEVEL info --execute --json-output
-chatcrs debug upgrade apply --expected-sha <40-char-sha> --execute --json-output
+chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --json-output
+
+chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
 ```
 
-Isolation settings (`HOST`, `PORT`, `REDIS_*`, JWT, and encryption keys) cannot
-be changed through the settings command. Debug mutation commands accept no
-custom app or port, so they cannot be redirected to production.
-
-## Images acceptance
-
-The default flow verifies key-info and a regular `gpt-5.5` request without
-creating an image:
-
-```bash
-chatcrs verify images \
-  --base-url http://127.0.0.1:12392 \
-  --openai-env-file ~/.chatarch/envs/OpenAI/image2-73-debug.env \
-  --json-output
-```
-
-Only `--execute-image` invokes the image endpoint and writes a PNG.
+`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` absorbs official `crs` management semantics. It prints a remote execution plan by default; only `--execute` runs the official `crs ...` command through SSH in the target app directory. Captured stdout/stderr are redacted before rendering.
 
 ## Production safety
 
-These commands are read-only or plan-only by default:
+ChatCRS does not directly execute production traffic switching or edge-configuration changes. Production updates remain in the reviewed, dry-run-by-default release/cutover workflow.
 
-```bash
-chatcrs inspect --json-output
-chatcrs verify sidecar --json-output
-chatcrs nginx plan-cutover --json-output
-chatcrs cutover precheck --json-output
-chatcrs service update --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --json-output
-```
+See:
 
-`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` absorbs the official `crs` management semantics. It prints a remote execution plan by default; only `--execute` runs the official `crs ...` command through SSH in the target app directory. Captured stdout/stderr are redacted before rendering.
-
-ChatCRS does not currently execute production cutovers. Production updates remain
-in the reviewed, dry-run-by-default release/cutover workflow.
-
-See `docs/cli.md`, `docs/debug-service.md`, and
-`docs/production-maintenance.md` for details.
+- `docs/cli.md`
+- `docs/configuration.md`
+- `docs/production-maintenance.md`

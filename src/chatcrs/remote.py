@@ -116,6 +116,25 @@ class CrsApiError(RuntimeError):
         self.status = status
         self.body = body
 
+    def __str__(self) -> str:
+        parts = [super().__str__()]
+        if self.status is not None:
+            parts.append(f"status={self.status}")
+        reason = _safe_error_reason(self.body)
+        if reason:
+            parts.append(f"reason={reason}")
+        return " ".join(parts)
+
+
+def _safe_error_reason(body: Any) -> str:
+    if not isinstance(body, dict):
+        return ""
+    for key in ("message", "error", "detail"):
+        value = body.get(key)
+        if isinstance(value, str) and value:
+            return redact(value)
+    return ""
+
 
 class CrsHttpClient:
     """Small stdlib-only CRS HTTP client for admin and API-key endpoints."""
