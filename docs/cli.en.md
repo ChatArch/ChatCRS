@@ -1,75 +1,53 @@
 # CLI Tree
 
-This page lists **commands that are implemented and registered in code**. The command tree is verified against `chatcrs.cli` Click registration; command changes must keep this page in sync.
+This page lists **commands currently implemented and registered in `chatcrs.cli`**. Tests read the Click registry and keep this page aligned with command changes.
 
 ## Top-level commands
 
 ```text
-chatcrs                                           # ChatArch CRS operations and acceptance CLI
+chatcrs                                           # ChatArch CRS remote operations CLI
 ├── health                                        # Check the selected CRS /health endpoint
-├── local                                         # Local CRS verification entry point
-│   └── verify                                    # Verify local health/web/API/admin login
-├── verify                                        # Sidecar and special-output acceptance
-│   ├── sidecar                                   # Read-only 12390/12391 sidecar verification
-│   └── images                                    # Key-info/Responses by default; image generation requires opt-in
-├── admin                                         # Remote CRS Admin API operations over HTTPS
+├── inspect                                       # Read-only summary of known CRS topology and entry state
+├── admin                                         # Remote CRS Admin API operations
 │   ├── login                                     # Verify admin login without printing the session token
 │   ├── accounts                                  # Inspect or refresh OpenAI/Codex account state
-│   │   ├── usage                                 # Account usage, scheduling, and availability state
+│   │   ├── usage                                 # Account usage, scheduling, and availability summary
 │   │   └── refresh-status                        # Dry-run by default; --execute calls CRS reset-status
 │   └── keys                                      # Inspect CRS API key metadata and statistics
 │       ├── list                                  # List keys; optionally include batch stats/last-usage
 │       └── show                                  # Safe summary for one key by id/name
 ├── key                                           # API-key-only self-inspection commands
 │   └── info                                      # Current API key information, availability, and usage
-├── service                                       # Guarded wrapper for official crs lifecycle semantics
-│   ├── install                                   # Plan by default; --execute runs crs install remotely
-│   ├── update                                    # Plan by default; --execute runs crs update remotely
-│   ├── start                                     # Plan by default; --execute runs crs start remotely
-│   ├── stop                                      # Plan by default; --execute runs crs stop remotely
-│   ├── restart                                   # Plan by default; --execute runs crs restart remotely
-│   ├── status                                    # Plan by default; --execute runs crs status remotely
-│   ├── switch-branch                             # Plan by default; --execute runs crs switch-branch remotely
-│   └── update-pricing                            # Plan by default; --execute runs crs update-pricing remotely
-├── nginx                                         # Nginx CRS routing planning
-│   └── plan-cutover                              # Render a cutover diff; do not write or reload
-├── cutover                                       # Formal single-active cutover checks
-│   └── precheck                                  # Read-only cutover precheck
-├── debug                                         # Manage only the isolated debug runtime, never production
-│   ├── status                                    # Debug health/tmux/Redis/Git/safe settings
-│   ├── logs                                      # Redacted debug log tail
-│   ├── restart                                   # Plan by default; --execute restarts debug tmux
-│   ├── settings                                  # Show or update whitelisted debug settings
-│   │   ├── show                                  # Show non-sensitive settings
-│   │   └── set                                   # Plan by default; --execute mutates whitelisted fields
-│   └── upgrade                                   # Debug checkout upgrade flow
-│       ├── plan                                  # Compare current debug checkout with ChatArch dev
-│       └── apply                                 # Plan by default; --execute upgrades by reviewed SHA
-└── inspect                                       # Read-only inspection for known production/sidecar topology
+└── service                                       # Guarded wrapper for official crs lifecycle semantics
+    ├── install                                   # Plan by default; --execute runs crs install remotely
+    ├── update                                    # Plan by default; --execute runs crs update remotely
+    ├── start                                     # Plan by default; --execute runs crs start remotely
+    ├── stop                                      # Plan by default; --execute runs crs stop remotely
+    ├── restart                                   # Plan by default; --execute runs crs restart remotely
+    ├── status                                    # Plan by default; --execute runs crs status remotely
+    ├── switch-branch                             # Plan by default; --execute runs crs switch-branch remotely
+    └── update-pricing                            # Plan by default; --execute runs crs update-pricing remotely
 ```
 
 ## Coverage matrix
 
-| Discussed capability | Implemented commands | Boundary |
+| Capability | Implemented commands | Boundary |
 |---|---|---|
-| Per-account usage | `chatcrs admin accounts usage` | Admin HTTPS API; redacted usage/status/scheduling summary |
-| Refresh/reset account status | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS `reset-status`; not an OAuth refresh-token force refresh |
-| API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Masked key, status, limits, stats, and last-usage summaries |
-| API-key-only self info | `chatcrs key info` | No admin credentials required |
-| Official `/usr/bin/crs` lifecycle | `chatcrs service install`, `chatcrs service update`, `chatcrs service start`, `chatcrs service stop`, `chatcrs service restart`, `chatcrs service status`, `chatcrs service switch-branch`, `chatcrs service update-pricing` | Plan by default; `--execute` SSHes into the target app directory and runs official `crs ...` |
-| Production/sidecar topology | `chatcrs inspect`, `chatcrs verify sidecar`, `chatcrs health` | Read-only |
-| Nginx / cutover planning | `chatcrs nginx plan-cutover`, `chatcrs cutover precheck` | Diff/precheck only; no write and no reload |
-| Images acceptance | `chatcrs verify images` | No image generation unless `--execute-image` is passed |
-| Isolated debug runtime | `chatcrs debug status/logs/restart/settings/upgrade` | Pinned to 12392; mutations are plan-only by default |
+| CRS health | `chatcrs health` | Read-only HTTP health summary |
+| Topology summary | `chatcrs inspect` | Read-only aggregation of known instances, edge state, and runtime status; no config writes |
+| Admin login | `chatcrs admin login` | Verifies credentials; reports token presence only |
+| Account usage | `chatcrs admin accounts usage` | Admin HTTPS API; redacted usage/status/scheduling summary |
+| Account status reset | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS reset-status; not an OAuth refresh-token force-refresh |
+| API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted key values, status, limits, stats, and last-usage summaries |
+| API-key-only self info | `chatcrs key info` | No administrator login required |
+| Official lifecycle | `chatcrs service install`, `chatcrs service update`, `chatcrs service start`, `chatcrs service stop`, `chatcrs service restart`, `chatcrs service status`, `chatcrs service switch-branch`, `chatcrs service update-pricing` | Plan by default; `--execute` SSHes into the target app directory and runs official `crs ...` |
 
 ## Registered command list
 
 | Command | Responsibility |
 |---|---|
 | `chatcrs health` | CRS health check |
-| `chatcrs local verify` | Local CRS verification |
-| `chatcrs verify sidecar` | Read-only sidecar acceptance |
-| `chatcrs verify images` | Images/Responses acceptance |
+| `chatcrs inspect` | Read-only known CRS topology inspection |
 | `chatcrs admin login` | Admin login verification |
 | `chatcrs admin accounts usage` | Account usage inspection |
 | `chatcrs admin accounts refresh-status` | CRS account reset-status |
@@ -84,16 +62,6 @@ chatcrs                                           # ChatArch CRS operations and 
 | `chatcrs service status` | Official crs status semantics |
 | `chatcrs service switch-branch` | Official crs switch-branch semantics |
 | `chatcrs service update-pricing` | Official crs update-pricing semantics |
-| `chatcrs nginx plan-cutover` | Nginx cutover diff planning |
-| `chatcrs cutover precheck` | Formal cutover precheck |
-| `chatcrs debug status` | Debug runtime status |
-| `chatcrs debug logs` | Redacted debug log reading |
-| `chatcrs debug restart` | Debug restart plan/execute |
-| `chatcrs debug settings show` | Show debug settings |
-| `chatcrs debug settings set` | Mutate whitelisted debug settings |
-| `chatcrs debug upgrade plan` | Debug upgrade plan |
-| `chatcrs debug upgrade apply` | Debug upgrade execute |
-| `chatcrs inspect` | Read-only known CRS topology inspection |
 
 ## Remote admin and API key { #remote-admin-and-api-key }
 
@@ -148,7 +116,7 @@ chatcrs admin keys show <key_id_or_name> --json-output
 ```
 
 !!! warning "Meaning of refresh-status"
-    `refresh-status` resets CRS account status. It does not force-refresh Codex/OpenAI OAuth refresh tokens.
+    `refresh-status` resets CRS account state. It does not force-refresh Codex/OpenAI OAuth refresh tokens.
 
 ## API-key-only { #api-key-only }
 
@@ -181,16 +149,9 @@ chatcrs service                                   # Remote wrapper for official 
 Common target options:
 
 ```bash
-chatcrs service update \
-  --ssh-alias tencent.am \
-  --app-dir /home/zhihong/claude-relay-service/app \
-  --json-output
+chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --json-output
 
-chatcrs service update \
-  --ssh-alias tencent.am \
-  --app-dir /home/zhihong/claude-relay-service/app \
-  --execute \
-  --json-output
+chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
 ```
 
 Environment defaults:
@@ -206,46 +167,7 @@ CHATCRS_CRS_COMMAND # example: /usr/bin/crs; default: crs
 
 ## Safety boundaries { #safety-boundaries }
 
-### Read-only acceptance and production planning
-
-```text
-chatcrs health                                    # Check /health
-chatcrs local verify                              # Verify local CRS
-chatcrs verify sidecar                            # Verify sidecar topology
-chatcrs verify images                             # Does not generate images by default
-chatcrs inspect                                   # Read-only topology inspection
-chatcrs nginx plan-cutover                        # Render Nginx diff
-chatcrs cutover precheck                          # Evaluate single-active cutover conditions
-```
-
-These commands do not write Nginx, reload, or stop services.
-
-## Debug runtime
-
-```text
-chatcrs debug                                     # Fixed isolated debug runtime
-├── status                                        # health/tmux/Redis/Git/settings
-├── logs                                          # Redacted log tail
-├── restart                                       # Plan by default; --execute restarts tmux
-├── settings                                      # Debug settings whitelist
-│   ├── show                                      # Show public settings
-│   └── set                                       # Plan by default; --execute mutates whitelisted fields
-└── upgrade                                       # Debug checkout upgrade
-    ├── plan                                      # Read-only SHA comparison
-    └── apply                                     # Plan by default; --execute upgrades by reviewed SHA
-```
-
-Debug mutations are pinned to:
-
-```text
-app:   /home/zhihong/claude-relay-service-independent/app
-HTTP:  127.0.0.1:12392
-Redis: 127.0.0.1:6382 DB0
-tmux:  crs-debug-12392
-```
-
-## Update rules
-
-- New Click commands must update the top-level tree, the relevant group tree, and the coverage matrix.
-- Removed or renamed commands must update tests, README files, MkDocs pages, and CHANGELOG.
-- Planned but unimplemented capabilities must not appear in this command tree.
+- The packaged CLI now keeps only remote admin/key inspection, service lifecycle wrapping, health, and read-only inspect.
+- Web-edge work, formal traffic switching, image capability acceptance, and isolated debug-runtime operations are intentionally outside the registered command surface; when needed, the model should execute them from the active task runbook, scripts, and SSH/Nginx tools.
+- Any production mutation still requires explicit `--execute` plus a confirmed target, working directory, rollback boundary, and redacted output.
+- API keys, tokens, passwords, and OAuth credentials must not appear in chat, docs, PR bodies, or command output.

@@ -1,6 +1,6 @@
 # ChatCRS
 
-ChatCRS is ChatArch's CRS operations and acceptance CLI. It brings remote CRS admin inspection, API-key-only self checks, guarded official `crs` lifecycle semantics, Nginx/cutover planning, and isolated debug runtime management into one safety-first command surface.
+ChatCRS is ChatArch's remote CRS operations CLI. The registered command surface now focuses on remote admin inspection, API-key-only self checks, guarded official `crs` lifecycle wrapping, health, and read-only inspect.
 
 ## Choose an entry point
 
@@ -30,11 +30,11 @@ ChatCRS is ChatArch's CRS operations and acceptance CLI. It brings remote CRS ad
 
     [Open service commands](cli.md#service-lifecycle)
 
--   **Production safety and debug runtime**
+-   **Safety boundaries**
 
     ---
 
-    Production commands are read-only or plan-only by default; debug mutations are pinned to the isolated 12392 runtime.
+    Web-edge work, formal switching, image capability acceptance, and isolated debug runtime operations are not registered package commands; the model handles them from the active task runbook when needed.
 
     [Open safety boundaries](cli.md#safety-boundaries)
 
@@ -45,23 +45,18 @@ ChatCRS is ChatArch's CRS operations and acceptance CLI. It brings remote CRS ad
 | Scenario | Implemented entry point | Default behavior |
 |---|---|---|
 | CRS health | `chatcrs health` | Read-only |
-| Local verification | `chatcrs local verify` | Read-only |
-| Sidecar / Images acceptance | `chatcrs verify sidecar`, `chatcrs verify images` | Read-only by default; image generation requires opt-in |
+| Topology summary | `chatcrs inspect` | Read-only |
 | Admin account usage | `chatcrs admin accounts usage` | HTTPS Admin API, redacted summary |
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS reset-status |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted by default, optional stats |
 | API-key-only info | `chatcrs key info` | No administrator login |
 | Official `crs` lifecycle | `chatcrs service ...` | Plan by default; `--execute` runs over SSH |
-| Nginx / cutover | `chatcrs nginx plan-cutover`, `chatcrs cutover precheck` | Read-only / plan-only |
-| Debug runtime | `chatcrs debug ...` | Pinned to 12392; mutations are plan-only by default |
 
 ## Safety defaults
 
 - Inspection commands do not mutate remote state.
 - Mutations require explicit `--execute`.
 - `chatcrs service` targets are bound by `--ssh-alias`, `--app-dir`, and `--crs-command`; captured stdout/stderr are redacted before rendering.
-- `chatcrs debug` is pinned to `127.0.0.1:12392`, Redis `127.0.0.1:6382/0`, and tmux `crs-debug-12392`.
-- `HOST`, `PORT`, `REDIS_*`, JWT, and encryption settings cannot be changed through settings commands.
 - API keys, tokens, passwords, and OAuth credentials must not appear in command arguments or documentation output.
 
 ## Next steps
@@ -76,19 +71,19 @@ ChatCRS is ChatArch's CRS operations and acceptance CLI. It brings remote CRS ad
 
     [Open the CLI tree](cli.md)
 
--   **Debug runtime**
+-   **Configuration and targets**
 
     ---
 
-    Manage the fixed 12392 debug runtime: status, logs, restart, settings, and upgrade.
+    Review ChatEnv/environment fields, remote targets, and service lifecycle parameters.
 
-    [Open debug runtime docs](debug-service.md)
+    [Open configuration](configuration.md)
 
 -   **Production maintenance**
 
     ---
 
-    Understand read-only checks, cutover planning, and service lifecycle boundaries.
+    Understand why production update, Nginx/edge work, and guarded release/cutover flows stay at the task-runbook layer.
 
     [Open production maintenance](production-maintenance.md)
 

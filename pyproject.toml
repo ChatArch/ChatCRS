@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ChatCRS"
 dynamic = ["version"]
-description = "Safe CRS operations, remote admin inspection, lifecycle management, and acceptance tooling."
+description = "Safe CRS remote operations, admin inspection, and lifecycle management."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

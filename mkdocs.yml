@@ -1,5 +1,5 @@
 site_name: ChatCRS 文档
-site_description: Safe CRS operations, remote admin inspection, lifecycle management, and acceptance tooling
+site_description: Safe CRS remote operations, admin inspection, and lifecycle management
 site_url: https://arch.gh.wzhecnu.cn/ChatCRS/
 repo_url: https://github.com/ChatArch/ChatCRS
 repo_name: ChatArch/ChatCRS
@@ -7,9 +7,7 @@ repo_name: ChatArch/ChatCRS
 nav:
   - 首页: index.md
   - CLI 命令树: cli.md
-  - 调试服务管理: debug-service.md
   - 配置与目标: configuration.md
-  - Images 验收: images-acceptance.md
   - 生产维护: production-maintenance.md
   - 开发与发布: development.md
 
@@ -44,9 +42,7 @@ plugins:
           nav_translations:
             首页: Home
             CLI 命令树: CLI Tree
-            调试服务管理: Debug Runtime
             配置与目标: Configuration and Targets
-            Images 验收: Images Acceptance
             生产维护: Production Maintenance
             开发与发布: Development and Release
 

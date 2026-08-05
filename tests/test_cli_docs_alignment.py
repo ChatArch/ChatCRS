@@ -3,11 +3,8 @@ from pathlib import Path
 from chatcrs.cli import main
 
 
-DISCUSSED_CLI_LEAVES = {
+EXPECTED_CLI_LEAVES = {
     "chatcrs health",
-    "chatcrs local verify",
-    "chatcrs verify sidecar",
-    "chatcrs verify images",
     "chatcrs admin login",
     "chatcrs admin accounts usage",
     "chatcrs admin accounts refresh-status",
@@ -22,6 +19,13 @@ DISCUSSED_CLI_LEAVES = {
     "chatcrs service status",
     "chatcrs service switch-branch",
     "chatcrs service update-pricing",
+    "chatcrs inspect",
+}
+
+REMOVED_OPERATIONAL_CLI_LEAVES = {
+    "chatcrs local verify",
+    "chatcrs verify sidecar",
+    "chatcrs verify images",
     "chatcrs nginx plan-cutover",
     "chatcrs cutover precheck",
     "chatcrs debug status",
@@ -31,7 +35,6 @@ DISCUSSED_CLI_LEAVES = {
     "chatcrs debug settings set",
     "chatcrs debug upgrade plan",
     "chatcrs debug upgrade apply",
-    "chatcrs inspect",
 }
 
 
@@ -45,18 +48,30 @@ def _leaf_commands(command, prefix="chatcrs"):
     return leaves
 
 
-def test_discussed_cli_surface_is_registered():
+def _reference_text(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+def test_final_cli_surface_matches_user_approved_tree():
+    assert _leaf_commands(main) == EXPECTED_CLI_LEAVES
+
+
+def test_removed_operational_workflows_are_not_registered():
     registered = _leaf_commands(main)
-    assert DISCUSSED_CLI_LEAVES <= registered
+    assert registered.isdisjoint(REMOVED_OPERATIONAL_CLI_LEAVES)
 
 
-def test_cli_reference_covers_every_registered_leaf_command():
-    docs = Path("docs/cli.md").read_text(encoding="utf-8")
-    missing = sorted(command for command in _leaf_commands(main) if command not in docs)
+def test_cli_reference_covers_only_registered_leaf_commands():
+    docs = _reference_text("docs/cli.md")
+    missing = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
+    stale = sorted(command for command in REMOVED_OPERATIONAL_CLI_LEAVES if command in docs)
     assert not missing
+    assert not stale
 
 
-def test_english_cli_reference_covers_every_registered_leaf_command():
-    docs = Path("docs/cli.en.md").read_text(encoding="utf-8")
-    missing = sorted(command for command in _leaf_commands(main) if command not in docs)
+def test_english_cli_reference_covers_only_registered_leaf_commands():
+    docs = _reference_text("docs/cli.en.md")
+    missing = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
+    stale = sorted(command for command in REMOVED_OPERATIONAL_CLI_LEAVES if command in docs)
     assert not missing
+    assert not stale
