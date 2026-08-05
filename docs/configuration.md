@@ -30,4 +30,10 @@
 
 推荐把生产 CRS 管理 profile 放在 ChatEnv / `~/.chatarch/envs/CRS/<profile>.env`，命令默认读取 `admin` profile，也可以用 `--profile` 指定。
 
-敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。
+敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。Profile 文件应使用 `0600` 权限。
+
+## 登录排查
+
+`chatcrs key info` 使用 CRS API key；`chatcrs admin ...` 使用管理员用户名/密码或管理员 token。前者 HTTP 200 只能证明 API key 自查链路可用，不能证明 admin profile 可用。
+
+如果 `chatcrs admin accounts usage` 返回 `CRS admin login failed status=401 reason=Invalid username or password`，说明当前 profile 的管理员凭据没有被生产 `/web/auth/login` 接受。此时应刷新 ChatEnv profile 中的 `CRS_USERNAME` / `CRS_PASSWORD` 或提供有效 `CRS_ACCESS_TOKEN`，而不是排查 account usage API 解析。

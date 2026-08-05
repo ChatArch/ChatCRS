@@ -29,6 +29,9 @@
 - Remove legacy local verification, special acceptance, edge cutover, and debug
   runtime operations from the registered package CLI surface; those workflows
   move to task-specific runbooks and model-operated tooling.
+- Improve remote Admin API login failures so the CLI reports safe status/reason
+  details such as `status=401 reason=Invalid username or password` without
+  leaking credentials.
 - Bump package version to 0.2.1.
 
 ## 2026-08-04 - 0.2.0
