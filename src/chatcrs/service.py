@@ -1,17 +1,17 @@
-"""Guarded remote CRS service lifecycle helpers."""
+"""Local-only CRS service lifecycle helpers.
+
+The service namespace is intended to run on the CRS host itself. It never
+constructs SSH commands, never reads legacy remote target profiles, and never
+uses remote host aliases as an implementation shortcut.
+"""
 
 from __future__ import annotations
 
-import os
-import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
 
-from chatenv import EnvStore
-
-from chatcrs.config import ChatcrsConfig
 from chatcrs.redaction import redact
 
 
@@ -21,7 +21,7 @@ class CompletedProcessLike(Protocol):
     stderr: str
 
 
-Runner = Callable[[list[str]], CompletedProcessLike]
+Runner = Callable[..., CompletedProcessLike]
 
 
 OFFICIAL_CRS_ACTIONS = {
@@ -43,26 +43,13 @@ MUTATING_ACTIONS = {
     "switch-branch",
     "update-pricing",
 }
-DEFAULT_CHATARCH_HOME = Path("~/.chatarch")
-
-
-def _chatarch_envs_dir() -> Path:
-    return Path(os.environ.get("CHATARCH_HOME") or DEFAULT_CHATARCH_HOME).expanduser() / "envs"
-
-
-def _load_chatcrs_chatenv_profile() -> dict[str, str]:
-    try:
-        return EnvStore(_chatarch_envs_dir()).load_active(ChatcrsConfig)
-    except OSError:
-        return {}
 
 
 @dataclass(frozen=True)
 class ServiceTarget:
-    """Remote CRS host/service target for lifecycle commands."""
+    """Current-machine CRS service target."""
 
-    ssh_alias: str | None = None
-    app_dir: str = "/home/zhihong/claude-relay-service/app"
+    app_dir: Path | str | None = None
     crs_command: str = "crs"
     timeout: float = 120.0
 
@@ -70,38 +57,36 @@ class ServiceTarget:
     def from_options(
         cls,
         *,
-        ssh_alias: str | None = None,
-        app_dir: str | None = None,
+        app_dir: str | Path | None = None,
         crs_command: str | None = None,
         timeout: float = 120.0,
     ) -> "ServiceTarget":
-        resolved_ssh_alias = ssh_alias or os.environ.get("CHATCRS_SSH_ALIAS")
-        resolved_app_dir = app_dir or os.environ.get("CHATCRS_APP_DIR")
-        resolved_crs_command = crs_command or os.environ.get("CHATCRS_CRS_COMMAND")
-        chatenv_values: dict[str, str] = {}
-        if not (resolved_ssh_alias and resolved_app_dir and resolved_crs_command):
-            chatenv_values = _load_chatcrs_chatenv_profile()
         return cls(
-            ssh_alias=resolved_ssh_alias or chatenv_values.get("CHATCRS_SSH_ALIAS"),
-            app_dir=resolved_app_dir or chatenv_values.get("CHATCRS_APP_DIR") or cls.app_dir,
-            crs_command=resolved_crs_command or chatenv_values.get("CHATCRS_CRS_COMMAND") or cls.crs_command,
+            app_dir=Path(app_dir).expanduser().resolve() if app_dir else Path.cwd(),
+            crs_command=crs_command or "crs",
             timeout=timeout,
         )
 
+    @property
+    def resolved_app_dir(self) -> Path:
+        if self.app_dir is None:
+            return Path.cwd()
+        return Path(self.app_dir).expanduser().resolve()
+
     def safe_summary(self) -> dict[str, object]:
         return {
-            "ssh_alias": self.ssh_alias,
-            "app_dir": self.app_dir,
+            "scope": "local",
+            "app_dir": str(self.resolved_app_dir),
             "crs_command": self.crs_command,
             "timeout": self.timeout,
         }
 
 
-def _default_runner(argv: list[str], *, timeout: float) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, text=True, capture_output=True, timeout=timeout, check=False)
+def _default_runner(argv: list[str], *, cwd: Path, timeout: float) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, cwd=cwd, text=True, capture_output=True, timeout=timeout, check=False)
 
 
-def _official_crs_command(action: str, *, crs_command: str = "crs", branch: str | None = None) -> list[str]:
+def _local_crs_command(action: str, *, crs_command: str = "crs", branch: str | None = None) -> list[str]:
     if action not in OFFICIAL_CRS_ACTIONS:
         raise ValueError(f"Unsupported CRS service action: {action}")
     command = [crs_command, action]
@@ -112,24 +97,6 @@ def _official_crs_command(action: str, *, crs_command: str = "crs", branch: str 
     elif branch:
         raise ValueError(f"{action} does not accept a branch argument")
     return command
-
-
-def _remote_shell(target: ServiceTarget, official_command: list[str]) -> str:
-    return f"cd {shlex.quote(target.app_dir)} && " + " ".join(shlex.quote(part) for part in official_command)
-
-
-def _ssh_argv(target: ServiceTarget, shell_command: str) -> list[str]:
-    if not target.ssh_alias:
-        raise ValueError("--ssh-alias or CHATCRS_SSH_ALIAS is required for service execution")
-    return [
-        "ssh",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "ConnectTimeout=8",
-        target.ssh_alias,
-        shell_command,
-    ]
 
 
 def _safe_text(text: str, *, limit: int = 12000) -> str:
@@ -143,41 +110,36 @@ def run_service_action(
     action: str,
     *,
     target: ServiceTarget,
-    execute: bool = False,
+    execute: bool | None = None,
     branch: str | None = None,
-    runner: Callable[[list[str]], CompletedProcessLike] | None = None,
+    runner: Runner | None = None,
 ) -> dict[str, object]:
-    """Plan or execute one official-CRS lifecycle action through SSH."""
+    """Plan or execute one official CRS lifecycle action on this machine."""
 
-    official_command = _official_crs_command(action, crs_command=target.crs_command, branch=branch)
-    shell_command = _remote_shell(target, official_command)
     is_mutating = action in MUTATING_ACTIONS
+    should_execute = (not is_mutating) if execute is None else execute
+    local_command = _local_crs_command(action, crs_command=target.crs_command, branch=branch)
     payload: dict[str, object] = {
         "ok": True,
         "action": action,
-        "mode": "execute" if execute else "plan",
-        "mutated": bool(execute and is_mutating),
+        "mode": "execute" if should_execute else "plan",
+        "mutated": bool(should_execute and is_mutating),
         "target": target.safe_summary(),
-        "official_crs_command": official_command,
-        "remote_shell": shell_command,
+        "local_command": local_command,
         "safety": {
+            "transport": "local",
+            "server_local_only": True,
             "requires_execute": is_mutating,
             "dry_run_default": is_mutating,
-            "transport": "ssh",
             "redacted_output": True,
         },
     }
 
-    if not execute:
+    if not should_execute:
         return payload
 
-    argv = _ssh_argv(target, shell_command)
     run = runner or _default_runner
-    try:
-        completed = run(argv, timeout=target.timeout)  # type: ignore[misc]
-    except TypeError:
-        completed = run(argv)  # type: ignore[misc]
-
+    completed = run(local_command, cwd=target.resolved_app_dir, timeout=target.timeout)
     payload.update(
         {
             "ok": completed.returncode == 0,

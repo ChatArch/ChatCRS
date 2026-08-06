@@ -14,7 +14,9 @@
 
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS 远程运维 CLI，提供远程 CRS 管理员/API-key 查询、受控 CRS service 生命周期管理、health 和只读拓扑摘要。Web edge、正式切换、图片能力验收和隔离调试 runtime 不作为包内注册命令；需要时按当前任务 runbook 由模型操作。
+ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面优先使用 CRS HTTP/Admin API；`service` 域是 server-local surface，只在 CRS 服务器本机 shell 里操作本机 CRS checkout / Node runtime / `crs` executable。
+
+Images 验收、debug runtime、Nginx/edge、release/cutover 等花哨/任务型能力不作为当前包内命令暴露；这些属于代理站维护、专项验收或运维 runbook，后续需要时单独设计。
 
 ## 安装与开发
 
@@ -40,45 +42,64 @@ python -m mkdocs serve
 ```text
 chatcrs
 ├── health
-├── inspect
 ├── admin login
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
 ├── key info
-├── service install / update / start / stop / restart
-└── service status / switch-branch / update-pricing
+└── service install / update / start / stop / restart / status / switch-branch / update-pricing
 ```
 
-## 远程管理员与 API key
+## HTTP/Admin 与 API key
 
 ```bash
-chatcrs admin login --json-output
-chatcrs admin accounts usage --json-output
-chatcrs admin accounts refresh-status <account_id> --json-output
-chatcrs admin accounts refresh-status <account_id> --execute --json-output
-chatcrs admin keys list --include-stats --json-output
-chatcrs admin keys show <key_id_or_name> --json-output
-chatcrs key info --json-output
+chatcrs health --base-url https://crs.example.com --json-output
+chatcrs admin login --profile admin --json-output
+chatcrs admin accounts usage --profile admin --json-output
+chatcrs admin accounts refresh-status <account_id> --profile admin --json-output
+chatcrs admin accounts refresh-status <account_id> --profile admin --execute --json-output
+chatcrs admin keys list --profile admin --include-stats --json-output
+chatcrs admin keys show <key_id_or_name> --profile admin --json-output
+chatcrs key info --profile admin --json-output
 ```
 
-## Service 生命周期
+## Server-local service
+
+这些命令应安装在目标 CRS 服务器上，并在该服务器本机执行：
 
 ```bash
-chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --json-output
-
-chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
+chatcrs service status --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --execute --json-output
+chatcrs service restart --app-dir /path/to/crs --execute --json-output
 ```
 
-`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` 吸收官方 `crs` 管理语义；默认只输出远程执行计划，只有显式 `--execute` 才通过 SSH 在目标 app 目录执行官方 `crs ...`。stdout/stderr 会做敏感信息脱敏。
+`status` 默认执行本机只读 `crs status`。其它 service mutation 默认 dry-run，需要 `--execute` 才执行。
 
-Service target 默认值可放在 ChatEnv `Chatcrs` active profile（`~/.chatarch/envs/Chatcrs/.env`）：`CHATCRS_SSH_ALIAS`、`CHATCRS_APP_DIR`、`CHATCRS_CRS_COMMAND`。解析顺序为显式 CLI 参数 > 进程环境变量 > ChatEnv profile > 包内默认值。
+## 配置
+
+ChatCRS 使用一套 CRS ChatEnv profile，默认读取 `~/.chatarch/envs/CRS/admin.env`，也可以用 `--profile` 指定其它 profile。
+
+Canonical 字段：
+
+```text
+CRS_API_BASE
+CRS_API_KEY
+CRS_USERNAME
+CRS_PASSWORD
+CRS_ACCESS_TOKEN
+```
+
+Service-local 目标不进入第二套 ChatEnv namespace；用当前工作目录或 `--app-dir` / `--crs-command` 指定本机 checkout 和 executable。
+
+敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。Profile 文件应使用 `0600` 权限。
 
 ## 生产安全
 
-ChatCRS 当前不直接执行生产切流或 edge 配置变更。生产更新继续使用经过审核、默认 dry-run 的独立 release/cutover 流程。
+外部管理只能使用 HTTP/Admin API；没有 HTTP lifecycle 接口时，不用远端执行补洞。要么新增 CRS API/host-agent，要么在目标服务器本机运行 `chatcrs service ...`。
 
 更多内容见：
 
 - `docs/cli.md`
+- `docs/interfaces.md`
 - `docs/configuration.md`
 - `docs/production-maintenance.md`

@@ -1,10 +1,8 @@
-import base64
 import json
 
 from click.testing import CliRunner
 
 from chatcrs.cli import main
-
 
 
 def test_health_command_uses_base_url_argument(monkeypatch):
@@ -28,80 +26,29 @@ def test_health_command_uses_base_url_argument(monkeypatch):
     assert json.loads(result.output)["health"]["status"] == 200
 
 
-def test_load_local_secrets_redacts_password(tmp_path):
-    from chatcrs.local import load_local_secrets
-
-    secrets = tmp_path / ".local-secrets.env"
-    secrets.write_text("ADMIN_USERNAME=admin\nADMIN_PASSWORD=secret\n", encoding="utf-8")
-
-    loaded = load_local_secrets(secrets)
-
-    assert loaded["ADMIN_USERNAME"] == "admin"
-    assert loaded["ADMIN_PASSWORD"] == "secret"
-    assert "secret" not in loaded["_redacted"]
-    assert loaded["_redacted"]["ADMIN_PASSWORD"] == "[REDACTED]"
-
-
-def test_verify_images_preflight_checks_key_and_regular_model(monkeypatch, tmp_path):
+def test_health_command_reads_crs_api_base(monkeypatch):
     import chatcrs.local as local
 
-    env_file = tmp_path / "openai.env"
-    env_file.write_text("OPENAI_API_KEY='secret-crs-key'\n", encoding="utf-8")
-    calls = []
+    monkeypatch.setenv("CRS_API_BASE", "https://crs.example.test/")
+    monkeypatch.setattr(local, "_request_status", lambda base, path, **kwargs: (200, b'{"status":"healthy"}'))
 
-    def fake_request(base_url, path, **kwargs):
-        calls.append((base_url, path, kwargs))
-        assert kwargs["headers"]["authorization"] == "Bearer secret-crs-key"
-        if path == "/openai/key-info":
-            return 200, json.dumps({"name": "image-test", "permissions": ["openai"]}).encode()
-        if path == "/openai/v1/responses":
-            return 200, b'data: {"text":"CHATCRS_KEY_OK"}\n\n'
-        raise AssertionError(path)
-
-    monkeypatch.setattr(local, "_request_status", fake_request)
-
-    payload = local.verify_images_api(
-        base_url="http://127.0.0.1:12392",
-        openai_env_file=env_file,
-    )
+    payload = local.health_check()
 
     assert payload["ok"] is True
+    assert payload["base_url"] == "https://crs.example.test"
     assert payload["mutated"] is False
-    assert payload["api_key"] == "[REDACTED]"
-    assert payload["key_info"]["name"] == "image-test"
-    assert payload["regular_model"]["expected_marker"] is True
-    assert payload["image"]["executed"] is False
-    assert [path for _, path, _ in calls] == ["/openai/key-info", "/openai/v1/responses"]
 
 
-def test_verify_images_execute_writes_valid_png(monkeypatch, tmp_path):
+def test_health_command_wraps_connection_failures_as_click_errors(monkeypatch):
     import chatcrs.local as local
 
-    env_file = tmp_path / "openai.env"
-    env_file.write_text("OPENAI_API_KEY=secret-crs-key\n", encoding="utf-8")
-    output = tmp_path / "result.png"
-    png = b"\x89PNG\r\n\x1a\n" + b"image-bytes"
+    def fail_health(base_url):
+        raise OSError("connection refused")
 
-    def fake_request(base_url, path, **kwargs):
-        if path == "/openai/key-info":
-            return 200, b'{"name":"image-test","permissions":["openai"]}'
-        if path == "/openai/v1/responses":
-            return 200, b"data: CHATCRS_KEY_OK\n\n"
-        if path == "/openai/v1/images/generations":
-            body = {"data": [{"b64_json": base64.b64encode(png).decode()}]}
-            return 200, json.dumps(body).encode()
-        raise AssertionError(path)
+    monkeypatch.setattr(local, "health_check", fail_health)
 
-    monkeypatch.setattr(local, "_request_status", fake_request)
+    result = CliRunner().invoke(main, ["health", "--base-url", "http://127.0.0.1:9"])
 
-    payload = local.verify_images_api(
-        openai_env_file=env_file,
-        output_path=output,
-        execute_image=True,
-    )
-
-    assert payload["ok"] is True
-    assert payload["mutated"] is True
-    assert payload["image"]["executed"] is True
-    assert payload["image"]["png"] is True
-    assert output.read_bytes() == png
+    assert result.exit_code == 1
+    assert result.exception is not None
+    assert "Error: connection refused" in result.output

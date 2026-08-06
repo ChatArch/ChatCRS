@@ -10,10 +10,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from chatenv import EnvStore, get_paths
+
+from chatcrs.config import ChatcrsConfig
 from chatcrs.redaction import redact
 
 DEFAULT_CRS_PROFILE = "admin"
-DEFAULT_CHATARCH_HOME = Path("~/.chatarch")
 
 
 @dataclass(frozen=True)
@@ -36,55 +38,22 @@ class CrsProfile:
         }
 
 
-def _strip_env_value(value: str) -> str:
-    stripped = value.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
-        return stripped[1:-1]
-    return stripped
-
-
-def _read_env_file(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    if not path.exists():
-        return values
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = _strip_env_value(value)
-    return values
-
-
 def load_crs_profile(profile: str = DEFAULT_CRS_PROFILE, *, home: str | Path | None = None) -> CrsProfile:
-    """Load a CRS profile from ChatEnv-style ``envs/CRS/<profile>.env``.
+    """Load a CRS profile from ChatEnv ``envs/CRS/<profile>.env``.
 
-    The user's current CRS admin profile uses the generic ``CRS_*`` keys. ChatCRS
-    also accepts ``CHATCRS_*`` aliases for forward compatibility.
+    ChatCRS has one canonical service namespace: CRS HTTP/API profiles. Host
+    lifecycle fields such as SSH aliases or app directories are intentionally
+    not part of this profile because they are not HTTP API management inputs.
     """
 
-    chatarch_home = Path(home or os.environ.get("CHATARCH_HOME") or DEFAULT_CHATARCH_HOME).expanduser()
-    values = _read_env_file(chatarch_home / "envs" / "CRS" / f"{profile}.env")
-    base_url = (
-        values.get("CRS_API_BASE")
-        or values.get("CRS_BASE_URL")
-        or values.get("CHATCRS_BASE_URL")
-        or os.environ.get("CRS_API_BASE")
-        or os.environ.get("CRS_BASE_URL")
-        or os.environ.get("CHATCRS_BASE_URL")
-        or ""
-    ).rstrip("/")
+    values = EnvStore(get_paths(home).envs_dir).load_profile(ChatcrsConfig, profile)
+    base_url = (values.get("CRS_API_BASE") or os.environ.get("CRS_API_BASE") or "").rstrip("/")
     return CrsProfile(
         base_url=base_url,
-        api_key=values.get("CRS_API_KEY") or values.get("CHATCRS_API_KEY") or os.environ.get("CRS_API_KEY", ""),
-        username=values.get("CRS_USERNAME") or values.get("CHATCRS_ADMIN_USERNAME") or os.environ.get("CRS_USERNAME", ""),
-        password=values.get("CRS_PASSWORD") or values.get("CHATCRS_ADMIN_PASSWORD") or os.environ.get("CRS_PASSWORD", ""),
-        admin_token=(
-            values.get("CRS_ACCESS_TOKEN")
-            or values.get("CRS_ADMIN_TOKEN")
-            or values.get("CHATCRS_ADMIN_TOKEN")
-            or os.environ.get("CRS_ACCESS_TOKEN", "")
-        ),
+        api_key=values.get("CRS_API_KEY") or os.environ.get("CRS_API_KEY", ""),
+        username=values.get("CRS_USERNAME") or os.environ.get("CRS_USERNAME", ""),
+        password=values.get("CRS_PASSWORD") or os.environ.get("CRS_PASSWORD", ""),
+        admin_token=values.get("CRS_ACCESS_TOKEN") or os.environ.get("CRS_ACCESS_TOKEN", ""),
     )
 
 

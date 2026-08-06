@@ -2,12 +2,23 @@
 
 ## Unreleased
 
+## 2026-08-06 - 0.2.2
+
 ### Changed
 
-- Let `chatcrs service ...` resolve `CHATCRS_SSH_ALIAS`, `CHATCRS_APP_DIR`, and
-  `CHATCRS_CRS_COMMAND` from the ChatEnv `Chatcrs` active profile before falling
-  back to package defaults, so local service management can be configured once
-  without repeating target arguments.
+- Replace the host-bound remote service lifecycle wrapper with local-only
+  `chatcrs service ...` commands that run on the CRS server itself and never use
+  remote execution transport.
+- Keep one canonical CRS ChatEnv namespace under `~/.chatarch/envs/CRS/` with
+  `CRS_API_BASE`, `CRS_API_KEY`, `CRS_USERNAME`, `CRS_PASSWORD`, and
+  `CRS_ACCESS_TOKEN`.
+- Document `service` as a server-local lifecycle/install/update/status surface,
+  while keeping verify/image/debug/Nginx/cutover task surfaces removed.
+- Add a CLI-to-HTTP/local interface map that ties every registered CLI leaf to its
+  CRS endpoint, auth source, mutation boundary, and importable Python API.
+- Keep API-key-only `chatcrs key info --help` focused on key/base-url/profile
+  options and wrap health connection failures as clean Click errors.
+- Bump package version to 0.2.2 for the local-only service patch release.
 
 ## 2026-08-04 - 0.2.1
 
@@ -16,9 +27,6 @@
 - Add remote CRS Admin/API-key inspection commands: `chatcrs admin login`,
   `chatcrs admin accounts usage`, `chatcrs admin accounts refresh-status`,
   `chatcrs admin keys list`, `chatcrs admin keys show`, and `chatcrs key info`.
-- Add guarded `chatcrs service` lifecycle commands that absorb official `crs`
-  management semantics for `install`, `update`, `start`, `stop`, `restart`,
-  `status`, `switch-branch`, and `update-pricing`.
 - Document the current implemented CLI tree with right-side command comments.
 - Align the MkDocs site with the ChatArch documentation pattern: card-based home
   pages, i18n suffix pages, canonical ChatArch docs URL, and a segmented CLI
@@ -28,10 +36,6 @@
 
 ### Changed
 
-- Keep service lifecycle actions dry-run/plan-only by default; only `--execute`
-  runs the official `crs ...` command over SSH in the target app directory.
-- Redact captured service stdout/stderr, including Authorization headers and
-  CRS API-key-shaped `cr_...` values.
 - Add a CLI-doc alignment test so the registered leaf commands exactly match
   the user-approved final command tree and stale operational commands stay out
   of the Chinese and English CLI reference pages.
@@ -47,9 +51,9 @@
 
 ### Added
 
-- Add fixed-target `chatcrs debug` management tree for status, redacted logs,
+- Add fixed-target debug management tree for status, redacted logs,
   guarded restart, safe settings, and exact-SHA upgrade.
-- Add explicit `--execute` gates, isolation validation, backups, health checks,
+- Add explicit execution gates, isolation validation, backups, health checks,
   audit records, and failure recovery for debug mutations.
 - Add Redis-authenticated debug status without exposing the password in argv or
   output.
