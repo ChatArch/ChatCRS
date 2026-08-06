@@ -30,6 +30,8 @@
 
 推荐把生产 CRS 管理 profile 放在 ChatEnv / `~/.chatarch/envs/CRS/<profile>.env`，命令默认读取 `admin` profile，也可以用 `--profile` 指定。
 
+Service lifecycle target profile 使用 ChatEnv `Chatcrs` active profile：`~/.chatarch/envs/Chatcrs/.env`。`chatcrs service ...` 会按“显式 CLI 参数 > 进程环境变量 > ChatEnv `Chatcrs` active profile > 包内默认值”解析 `CHATCRS_SSH_ALIAS`、`CHATCRS_APP_DIR` 和 `CHATCRS_CRS_COMMAND`。
+
 敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。Profile 文件应使用 `0600` 权限。
 
 ## 登录排查

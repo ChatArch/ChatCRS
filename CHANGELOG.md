@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Let `chatcrs service ...` resolve `CHATCRS_SSH_ALIAS`, `CHATCRS_APP_DIR`, and
+  `CHATCRS_CRS_COMMAND` from the ChatEnv `Chatcrs` active profile before falling
+  back to package defaults, so local service management can be configured once
+  without repeating target arguments.
+
 ## 2026-08-04 - 0.2.1
 
 ### Added

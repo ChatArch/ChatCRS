@@ -71,6 +71,8 @@ chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude
 
 `chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` absorbs official `crs` management semantics. It prints a remote execution plan by default; only `--execute` runs the official `crs ...` command through SSH in the target app directory. Captured stdout/stderr are redacted before rendering.
 
+Service target defaults can live in the ChatEnv `Chatcrs` active profile (`~/.chatarch/envs/Chatcrs/.env`): `CHATCRS_SSH_ALIAS`, `CHATCRS_APP_DIR`, and `CHATCRS_CRS_COMMAND`. Resolution order is explicit CLI options > process environment variables > ChatEnv profile > package defaults.
+
 ## Production safety
 
 ChatCRS does not directly execute production traffic switching or edge-configuration changes. Production updates remain in the reviewed, dry-run-by-default release/cutover workflow.

@@ -6,8 +6,12 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Protocol
 
+from chatenv import EnvStore
+
+from chatcrs.config import ChatcrsConfig
 from chatcrs.redaction import redact
 
 
@@ -39,6 +43,18 @@ MUTATING_ACTIONS = {
     "switch-branch",
     "update-pricing",
 }
+DEFAULT_CHATARCH_HOME = Path("~/.chatarch")
+
+
+def _chatarch_envs_dir() -> Path:
+    return Path(os.environ.get("CHATARCH_HOME") or DEFAULT_CHATARCH_HOME).expanduser() / "envs"
+
+
+def _load_chatcrs_chatenv_profile() -> dict[str, str]:
+    try:
+        return EnvStore(_chatarch_envs_dir()).load_active(ChatcrsConfig)
+    except OSError:
+        return {}
 
 
 @dataclass(frozen=True)
@@ -59,10 +75,16 @@ class ServiceTarget:
         crs_command: str | None = None,
         timeout: float = 120.0,
     ) -> "ServiceTarget":
+        resolved_ssh_alias = ssh_alias or os.environ.get("CHATCRS_SSH_ALIAS")
+        resolved_app_dir = app_dir or os.environ.get("CHATCRS_APP_DIR")
+        resolved_crs_command = crs_command or os.environ.get("CHATCRS_CRS_COMMAND")
+        chatenv_values: dict[str, str] = {}
+        if not (resolved_ssh_alias and resolved_app_dir and resolved_crs_command):
+            chatenv_values = _load_chatcrs_chatenv_profile()
         return cls(
-            ssh_alias=ssh_alias or os.environ.get("CHATCRS_SSH_ALIAS"),
-            app_dir=app_dir or os.environ.get("CHATCRS_APP_DIR") or cls.app_dir,
-            crs_command=crs_command or os.environ.get("CHATCRS_CRS_COMMAND") or cls.crs_command,
+            ssh_alias=resolved_ssh_alias or chatenv_values.get("CHATCRS_SSH_ALIAS"),
+            app_dir=resolved_app_dir or chatenv_values.get("CHATCRS_APP_DIR") or cls.app_dir,
+            crs_command=resolved_crs_command or chatenv_values.get("CHATCRS_CRS_COMMAND") or cls.crs_command,
             timeout=timeout,
         )
 

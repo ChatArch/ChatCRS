@@ -350,9 +350,21 @@ def _common_service_options(function):
         help="Actually run the official crs lifecycle command over SSH. Without it, print a guarded plan.",
     )(function)
     function = click.option("--timeout", type=float, default=120.0, show_default=True)(function)
-    function = click.option("--crs-command", default=None, help="Remote crs command path. Defaults to crs or CHATCRS_CRS_COMMAND.")(function)
-    function = click.option("--app-dir", default=None, help="Remote CRS app directory. Defaults to CHATCRS_APP_DIR or canonical app path.")(function)
-    function = click.option("--ssh-alias", default=None, help="SSH target alias. Defaults to CHATCRS_SSH_ALIAS.")(function)
+    function = click.option(
+        "--crs-command",
+        default=None,
+        help="Remote crs command path. Defaults to process CHATCRS_CRS_COMMAND, ChatEnv Chatcrs profile, then crs.",
+    )(function)
+    function = click.option(
+        "--app-dir",
+        default=None,
+        help="Remote CRS app directory. Defaults to process CHATCRS_APP_DIR, ChatEnv Chatcrs profile, then canonical app path.",
+    )(function)
+    function = click.option(
+        "--ssh-alias",
+        default=None,
+        help="SSH target alias. Defaults to process CHATCRS_SSH_ALIAS or ChatEnv Chatcrs profile.",
+    )(function)
     return function
 
 
@@ -368,7 +380,7 @@ def _emit_service_payload(payload: dict, *, json_output: bool) -> None:
 
 @main.group(name="service")
 def service_group() -> None:
-    """Guarded CRS lifecycle commands absorbed from official crs."""
+    """Guarded CRS lifecycle commands; target defaults can come from ChatEnv Chatcrs profile."""
 
 
 def _service_action_command(action: str, *, branch: str | None, ssh_alias: str | None, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:

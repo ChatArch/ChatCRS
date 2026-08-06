@@ -6,10 +6,34 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import pytest
 from click.testing import CliRunner
 
 from chatcrs.cli import main
 from chatcrs.remote import CrsApiError, CrsHttpClient, CrsProfile, load_crs_profile
+
+CRS_ENV_KEYS = (
+    "CRS_API_BASE",
+    "CRS_API_KEY",
+    "CRS_USERNAME",
+    "CRS_PASSWORD",
+    "CRS_ACCESS_TOKEN",
+    "CRS_ADMIN_TOKEN",
+    "CHATCRS_BASE_URL",
+    "CHATCRS_API_KEY",
+    "CHATCRS_ADMIN_USERNAME",
+    "CHATCRS_ADMIN_PASSWORD",
+    "CHATCRS_ADMIN_TOKEN",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_crs_profile_env(tmp_path, monkeypatch):
+    """Keep remote-management tests independent from the user's real CRS profiles."""
+
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "chatarch-home"))
+    for key in CRS_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
 
 
 class FakeCrsHandler(BaseHTTPRequestHandler):

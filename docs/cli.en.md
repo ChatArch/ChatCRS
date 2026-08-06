@@ -154,7 +154,9 @@ chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude
 chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
 ```
 
-Environment defaults:
+Default resolution order: explicit CLI options > process environment variables > the ChatEnv `Chatcrs` active profile > package defaults.
+
+Fields can live in the ChatEnv `~/.chatarch/envs/Chatcrs/.env` file or in the process environment:
 
 ```text
 CHATCRS_SSH_ALIAS   # example: tencent.am
