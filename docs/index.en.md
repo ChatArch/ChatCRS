@@ -2,7 +2,46 @@
 
 ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on CRS HTTP/Admin API, API-key-only self checks, and health. The `service` namespace runs local `crs` commands only inside the CRS server shell.
 
-## Choose an entry point
+## Documentation sections
+
+<div class="grid cards" markdown>
+
+-   **Management**
+
+    ---
+
+    Start from the real CLI tree and inspect HTTP/Admin API, API-key-only checks, and local service commands.
+
+    [Open the CLI tree](cli.md)
+    [Open the interface map](interfaces.md)
+
+-   **Configuration**
+
+    ---
+
+    Review the single CRS ChatEnv profile, `CRS_*` fields, redaction rules, and local service targets.
+
+    [Open configuration](configuration.md)
+
+-   **Operations**
+
+    ---
+
+    Separate package commands, server-local maintenance entry points, and production work that still needs a runbook or new API.
+
+    [Open production maintenance](production-maintenance.md)
+
+-   **Development**
+
+    ---
+
+    Review local setup, tests, documentation builds, release flow, and version constraints.
+
+    [Open development and release](development.md)
+
+</div>
+
+## Common entry points
 
 <div class="grid cards" markdown>
 
@@ -12,7 +51,7 @@ ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on C
 
     Inspect OpenAI/Codex account usage, CRS API key statistics, and dry-run-by-default account status reset.
 
-    [Open the CLI tree](cli.md#remote-admin-and-api-key)
+    [Open admin commands](cli.md#remote-admin-and-api-key)
 
 -   **API-key-only self check**
 
@@ -22,7 +61,7 @@ ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on C
 
     [Open key-only commands](cli.md#api-key-only)
 
--   **CLI and HTTP interface map**
+-   **CLI and interface map**
 
     ---
 
@@ -34,7 +73,7 @@ ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on C
 
     ---
 
-    The `service` namespace is restored, but only for local install/update/status/restart-style `crs` commands on the CRS server itself.
+    The `service` namespace runs install/update/status/restart-style local `crs` commands only on the CRS server itself.
 
     [Review the service boundary](cli.md#server-local-service)
 
@@ -67,33 +106,3 @@ For the endpoint-level map, see [CLI and HTTP interface map](interfaces.md).
 - Mutations require explicit `--execute`.
 - Outside-server management must use CRS HTTP/Admin API; lifecycle capabilities without endpoints require a new API/agent or running `chatcrs service ...` on the server itself.
 - API keys, tokens, passwords, and OAuth credentials must not appear in command arguments or documentation output.
-
-## Next steps
-
-<div class="grid cards" markdown>
-
--   **Complete CLI tree**
-
-    ---
-
-    Generated from actual Click command registration and annotated with command boundaries.
-
-    [Open the CLI tree](cli.md)
-
--   **Configuration and targets**
-
-    ---
-
-    Review the single CRS ChatEnv profile, environment fields, and sensitive-value rules.
-
-    [Open configuration](configuration.md)
-
--   **Production maintenance**
-
-    ---
-
-    Understand why production update, edge work, and release/cutover flows stay at the task-runbook layer.
-
-    [Open production maintenance](production-maintenance.md)
-
-</div>
