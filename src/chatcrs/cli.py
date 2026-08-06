@@ -8,6 +8,7 @@ import click
 
 import chatcrs.local as local_management
 import chatcrs.remote as remote_management
+import chatcrs.service as service_management
 from chatcrs import __version__
 
 
@@ -18,7 +19,7 @@ def _echo_json(payload: dict) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, prog_name="chatcrs")
 def main() -> None:
-    """HTTP-first CRS management helpers for ChatArch."""
+    """CRS HTTP/API helpers plus server-local service commands for ChatArch."""
 
 
 @main.command(name="health")
@@ -315,6 +316,149 @@ def key_info_command(
         _echo_json(payload)
     else:
         click.echo(f"ok={payload['ok']} status={payload['status']} mutated={payload['mutated']}")
+
+
+def _service_target(
+    *,
+    app_dir: str | None,
+    crs_command: str | None,
+    timeout: float,
+) -> service_management.ServiceTarget:
+    return service_management.ServiceTarget.from_options(
+        app_dir=app_dir,
+        crs_command=crs_command,
+        timeout=timeout,
+    )
+
+
+def _service_action_command(
+    action: str,
+    *,
+    app_dir: str | None,
+    crs_command: str | None,
+    timeout: float,
+    execute: bool | None,
+    json_output: bool,
+    branch: str | None = None,
+) -> None:
+    target = _service_target(app_dir=app_dir, crs_command=crs_command, timeout=timeout)
+    try:
+        payload = service_management.run_service_action(action, target=target, execute=execute, branch=branch)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        local_command = payload["local_command"]
+        if not isinstance(local_command, list):
+            local_command = [local_command]
+        click.echo(
+            f"ok={payload['ok']} action={payload['action']} mode={payload['mode']} "
+            f"mutated={payload['mutated']} command={' '.join(str(part) for part in local_command)}"
+        )
+    if payload.get("mode") == "execute" and not payload.get("ok", False):
+        raise click.ClickException(f"crs {action} failed")
+
+
+@main.group(name="service")
+def service_group() -> None:
+    """Local CRS service lifecycle commands for the current server."""
+
+
+@service_group.command(name="install")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs install`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_install_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs install` on this server."""
+
+    _service_action_command("install", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="update")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs update`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_update_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs update` on this server."""
+
+    _service_action_command("update", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="start")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs start`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_start_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs start` on this server."""
+
+    _service_action_command("start", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="stop")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs stop`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_stop_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs stop` on this server."""
+
+    _service_action_command("stop", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="restart")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs restart`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_restart_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs restart` on this server."""
+
+    _service_action_command("restart", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
+
+
+@service_group.command(name="status")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_status_command(app_dir: str | None, crs_command: str | None, timeout: float, json_output: bool) -> None:
+    """Execute local `crs status` on this server."""
+
+    _service_action_command("status", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=None, json_output=json_output)
+
+
+@service_group.command(name="switch-branch")
+@click.argument("branch")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs switch-branch <branch>`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_switch_branch_command(branch: str, app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs switch-branch <branch>` on this server."""
+
+    _service_action_command("switch-branch", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output, branch=branch)
+
+
+@service_group.command(name="update-pricing")
+@click.option("--app-dir", default=None, type=click.Path(file_okay=False, path_type=str), help="Local CRS app directory. Defaults to the current working directory.")
+@click.option("--crs-command", default=None, help="Local crs executable or command name. Defaults to crs.")
+@click.option("--timeout", type=float, default=120.0, show_default=True)
+@click.option("--execute", is_flag=True, default=False, help="Actually run local `crs update-pricing`. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def service_update_pricing_command(app_dir: str | None, crs_command: str | None, timeout: float, execute: bool, json_output: bool) -> None:
+    """Plan or execute local `crs update-pricing` on this server."""
+
+    _service_action_command("update-pricing", app_dir=app_dir, crs_command=crs_command, timeout=timeout, execute=execute, json_output=json_output)
 
 
 if __name__ == "__main__":

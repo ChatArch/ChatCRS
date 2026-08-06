@@ -12,6 +12,25 @@ EXPECTED_CLI_LEAVES = {
     "chatcrs admin keys list",
     "chatcrs admin keys show",
     "chatcrs key info",
+    "chatcrs service install",
+    "chatcrs service update",
+    "chatcrs service start",
+    "chatcrs service stop",
+    "chatcrs service restart",
+    "chatcrs service status",
+    "chatcrs service switch-branch",
+    "chatcrs service update-pricing",
+}
+
+SERVICE_CLI_LEAVES = {
+    "chatcrs service install",
+    "chatcrs service update",
+    "chatcrs service start",
+    "chatcrs service stop",
+    "chatcrs service restart",
+    "chatcrs service status",
+    "chatcrs service switch-branch",
+    "chatcrs service update-pricing",
 }
 
 REMOVED_OPERATIONAL_CLI_LEAVES = {
@@ -28,14 +47,6 @@ REMOVED_OPERATIONAL_CLI_LEAVES = {
     "chatcrs debug settings set",
     "chatcrs debug upgrade plan",
     "chatcrs debug upgrade apply",
-    "chatcrs service install",
-    "chatcrs service update",
-    "chatcrs service start",
-    "chatcrs service stop",
-    "chatcrs service restart",
-    "chatcrs service status",
-    "chatcrs service switch-branch",
-    "chatcrs service update-pricing",
 }
 
 PUBLIC_DOCS = (
@@ -70,8 +81,8 @@ FORBIDDEN_PUBLIC_DOC_FRAGMENTS = (
     "CHATCRS_APP_DIR",
     "CHATCRS_CRS_COMMAND",
     "~/.chatarch/envs/Chatcrs",
-    "tencent.am",
-    "/home/zhihong",
+    "legacy.example.invalid",
+    "/srv/legacy-crs",
     "through SSH",
     "over SSH",
     "通过 SSH",
@@ -121,16 +132,20 @@ def test_interface_reference_maps_current_cli_to_http_endpoints():
     docs = _reference_text("docs/interfaces.md")
     missing_commands = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
     missing_endpoints = sorted(endpoint for endpoint in EXPECTED_HTTP_INTERFACES if endpoint not in docs)
+    missing_service_contract = sorted(fragment for fragment in ("local", "server-local", "local_command", "chatcrs.service.run_service_action") if fragment not in docs)
     assert not missing_commands
     assert not missing_endpoints
+    assert not missing_service_contract
 
 
 def test_english_interface_reference_maps_current_cli_to_http_endpoints():
     docs = _reference_text("docs/interfaces.en.md")
     missing_commands = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
     missing_endpoints = sorted(endpoint for endpoint in EXPECTED_HTTP_INTERFACES if endpoint not in docs)
+    missing_service_contract = sorted(fragment for fragment in ("local", "server-local", "local_command", "chatcrs.service.run_service_action") if fragment not in docs)
     assert not missing_commands
     assert not missing_endpoints
+    assert not missing_service_contract
 
 
 def test_public_docs_do_not_advertise_ssh_or_real_host_paths():

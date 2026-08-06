@@ -1,6 +1,6 @@
 # ChatCRS
 
-ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The registered command surface focuses on remote administrator HTTP API inspection, API-key-only self checks, and health.
+ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on CRS HTTP/Admin API, API-key-only self checks, and health. The `service` namespace runs local `crs` commands only inside the CRS server shell.
 
 ## Choose an entry point
 
@@ -26,17 +26,17 @@ ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The registered command 
 
     ---
 
-    Review the HTTP endpoint, authentication source, mutation boundary, and Python API behind each of the seven registered CLI leaves.
+    Review the HTTP endpoint or local_command, authentication source, mutation boundary, and Python API behind each registered CLI leaf.
 
     [Open the interface map](interfaces.md)
 
--   **Server-local candidate capabilities**
+-   **Server-local service**
 
     ---
 
-    Lifecycle, topology, edge, release/cutover, and similar capabilities are not registered today because they require server-local authority or a host-agent design.
+    The `service` namespace is restored, but only for local install/update/status/restart-style `crs` commands on the CRS server itself.
 
-    [Review candidate boundaries](cli.md#server-local-candidates)
+    [Review the service boundary](cli.md#server-local-service)
 
 -   **Safety boundaries**
 
@@ -57,6 +57,7 @@ ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The registered command 
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls the CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted by default, optional stats |
 | API-key-only info | `chatcrs key info` | No administrator login |
+| Server-local service | `chatcrs service ...` | Runs local commands only on the CRS server itself |
 
 For the endpoint-level map, see [CLI and HTTP interface map](interfaces.md).
 
@@ -64,7 +65,7 @@ For the endpoint-level map, see [CLI and HTTP interface map](interfaces.md).
 
 - Inspection commands do not mutate remote state.
 - Mutations require explicit `--execute`.
-- Management actions without CRS HTTP/Admin endpoints are not registered in the current CLI.
+- Outside-server management must use CRS HTTP/Admin API; lifecycle capabilities without endpoints require a new API/agent or running `chatcrs service ...` on the server itself.
 - API keys, tokens, passwords, and OAuth credentials must not appear in command arguments or documentation output.
 
 ## Next steps

@@ -14,9 +14,9 @@
 
 # ChatCRS
 
-ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The current registered commands cover CRS HTTP health, administrator HTTP API inspection/status operations, and CRS API-key self checks.
+ChatCRS is ChatArch's CRS management CLI. Outside-server management is HTTP/Admin API-first. The `service` namespace is a server-local surface: it runs only inside the CRS server shell and operates on that server's CRS checkout / Node runtime / `crs` executable.
 
-Host lifecycle, process management, Nginx/edge work, Redis snapshots, release/cutover workflows, debug runtimes, and image capability acceptance are not exposed as package commands today. They are server-local operations or task-runbook workflows; if they are reintroduced later, they must be designed as explicit server-local/host-agent capabilities rather than ordinary HTTP management commands.
+Image acceptance, debug runtimes, Nginx/edge work, release/cutover workflows, and similar task-specific surfaces are not package commands today. They belong to proxy-site maintenance, special acceptance, or operations runbooks and should be designed separately when scoped.
 
 ## Install and develop
 
@@ -45,10 +45,11 @@ chatcrs
 ├── admin login
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
-└── key info
+├── key info
+└── service install / update / start / stop / restart / status / switch-branch / update-pricing
 ```
 
-## Remote admin and API key
+## HTTP/Admin and API key
 
 ```bash
 chatcrs health --base-url https://crs.example.com --json-output
@@ -60,6 +61,19 @@ chatcrs admin keys list --profile admin --include-stats --json-output
 chatcrs admin keys show <key_id_or_name> --profile admin --json-output
 chatcrs key info --profile admin --json-output
 ```
+
+## Server-local service
+
+These commands should be installed on and executed from the target CRS server itself:
+
+```bash
+chatcrs service status --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --execute --json-output
+chatcrs service restart --app-dir /path/to/crs --execute --json-output
+```
+
+`status` runs local read-only `crs status` by default. Other service mutations are dry-run by default and require `--execute`.
 
 ## Configuration
 
@@ -75,11 +89,13 @@ CRS_PASSWORD
 CRS_ACCESS_TOKEN
 ```
 
+Service-local targets do not create a second ChatEnv namespace; use the current working directory or `--app-dir` / `--crs-command` for the local checkout and executable.
+
 Sensitive fields should live only in ChatEnv or the process environment, never in command arguments, documentation, PR bodies, or logs. Profile files should use `0600` permissions.
 
 ## Production safety
 
-ChatCRS does not directly execute production traffic switching, service process control, or edge-configuration changes. Production updates remain in the reviewed, dry-run-by-default release/cutover workflow.
+Outside-server management must use HTTP/Admin API. If no HTTP lifecycle endpoint exists, do not fill the gap with remote execution. Add a CRS API/host-agent, or run `chatcrs service ...` on the target server itself.
 
 See:
 

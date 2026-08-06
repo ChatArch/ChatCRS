@@ -1,6 +1,6 @@
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦远程管理员 HTTP API 查询、普通 API key 自查和 health。
+ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin API、普通 API key 自查和 health；`service` 域只在 CRS 服务器本机运行本机 `crs` 命令。
 
 ## 选择入口
 
@@ -26,17 +26,17 @@ ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦�
 
     ---
 
-    查看当前 7 个 CLI leaf 对应的 HTTP endpoint、认证来源、写入边界和 Python API。
+    查看当前 CLI leaf 对应的 HTTP endpoint 或 local_command、认证来源、写入边界和 Python API。
 
     [打开接口映射](interfaces.md)
 
--   **服务端本机候选能力**
+-   **Server-local service**
 
     ---
 
-    lifecycle、topology、edge、release/cutover 等能力当前不注册；它们需要服务端本机权限或 host-agent 设计。
+    `service` 域已经恢复，但只用于在 CRS 服务器本机运行 install/update/status/restart 等本机 `crs` 命令。
 
-    [查看候选能力边界](cli.md#server-local-candidates)
+    [查看 service 边界](cli.md#server-local-service)
 
 -   **安全边界**
 
@@ -57,6 +57,7 @@ ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦�
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 调 CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | 默认脱敏，可选 stats |
 | API-key-only info | `chatcrs key info` | 不需要管理员登录 |
+| Server-local service | `chatcrs service ...` | 只在 CRS 服务器本机执行本机命令 |
 
 接口级映射见：[命令与 HTTP 接口映射](interfaces.md)。
 
@@ -64,7 +65,7 @@ ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦�
 
 - Inspection commands 不修改远端状态。
 - 变更动作必须显式 `--execute`。
-- 没有 CRS HTTP/Admin endpoint 的管理动作，当前 CLI 不注册。
+- 外部管理必须走 CRS HTTP/Admin API；没有 endpoint 的 lifecycle 能力只能新增 API/agent，或在服务器本机跑 `chatcrs service ...`。
 - API key、token、password、OAuth 凭据不得进入命令参数或文档输出。
 
 ## 下一步

@@ -2,20 +2,23 @@
 
 ## Unreleased
 
+## 2026-08-06 - 0.2.2
+
 ### Changed
 
-- Remove host-bound remote service lifecycle commands from the registered CLI so
-  ChatCRS is HTTP/API-first by default.
+- Replace the host-bound remote service lifecycle wrapper with local-only
+  `chatcrs service ...` commands that run on the CRS server itself and never use
+  remote execution transport.
 - Keep one canonical CRS ChatEnv namespace under `~/.chatarch/envs/CRS/` with
   `CRS_API_BASE`, `CRS_API_KEY`, `CRS_USERNAME`, `CRS_PASSWORD`, and
   `CRS_ACCESS_TOKEN`.
-- Document server-local lifecycle, topology, edge, Redis, and release/cutover
-  workflows as candidate capabilities that need an explicit server-local or
-  host-agent design before they can be reintroduced.
-- Add a CLI-to-HTTP interface map that ties every registered CLI leaf to its
+- Document `service` as a server-local lifecycle/install/update/status surface,
+  while keeping verify/image/debug/Nginx/cutover task surfaces removed.
+- Add a CLI-to-HTTP/local interface map that ties every registered CLI leaf to its
   CRS endpoint, auth source, mutation boundary, and importable Python API.
 - Keep API-key-only `chatcrs key info --help` focused on key/base-url/profile
   options and wrap health connection failures as clean Click errors.
+- Bump package version to 0.2.2 for the local-only service patch release.
 
 ## 2026-08-04 - 0.2.1
 

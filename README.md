@@ -14,9 +14,9 @@
 
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令只覆盖 CRS HTTP health、管理员 HTTP API 查询/状态操作，以及普通 CRS API key 自查。
+ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面优先使用 CRS HTTP/Admin API；`service` 域是 server-local surface，只在 CRS 服务器本机 shell 里操作本机 CRS checkout / Node runtime / `crs` executable。
 
-Host lifecycle、进程管理、Nginx/edge、Redis 快照、release/cutover、debug runtime 和图片能力验收不作为当前包内命令暴露；这些属于服务端本机运维或任务 runbook，后续若要加回，必须设计为明确的 server-local/host-agent 能力，而不是普通 HTTP 管理命令。
+Images 验收、debug runtime、Nginx/edge、release/cutover 等花哨/任务型能力不作为当前包内命令暴露；这些属于代理站维护、专项验收或运维 runbook，后续需要时单独设计。
 
 ## 安装与开发
 
@@ -45,10 +45,11 @@ chatcrs
 ├── admin login
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
-└── key info
+├── key info
+└── service install / update / start / stop / restart / status / switch-branch / update-pricing
 ```
 
-## 远程管理员与 API key
+## HTTP/Admin 与 API key
 
 ```bash
 chatcrs health --base-url https://crs.example.com --json-output
@@ -60,6 +61,19 @@ chatcrs admin keys list --profile admin --include-stats --json-output
 chatcrs admin keys show <key_id_or_name> --profile admin --json-output
 chatcrs key info --profile admin --json-output
 ```
+
+## Server-local service
+
+这些命令应安装在目标 CRS 服务器上，并在该服务器本机执行：
+
+```bash
+chatcrs service status --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --json-output
+chatcrs service update --app-dir /path/to/crs --execute --json-output
+chatcrs service restart --app-dir /path/to/crs --execute --json-output
+```
+
+`status` 默认执行本机只读 `crs status`。其它 service mutation 默认 dry-run，需要 `--execute` 才执行。
 
 ## 配置
 
@@ -75,11 +89,13 @@ CRS_PASSWORD
 CRS_ACCESS_TOKEN
 ```
 
+Service-local 目标不进入第二套 ChatEnv namespace；用当前工作目录或 `--app-dir` / `--crs-command` 指定本机 checkout 和 executable。
+
 敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。Profile 文件应使用 `0600` 权限。
 
 ## 生产安全
 
-ChatCRS 当前不直接执行生产切流、服务进程控制或 edge 配置变更。生产更新继续使用经过审核、默认 dry-run 的独立 release/cutover 流程。
+外部管理只能使用 HTTP/Admin API；没有 HTTP lifecycle 接口时，不用远端执行补洞。要么新增 CRS API/host-agent，要么在目标服务器本机运行 `chatcrs service ...`。
 
 更多内容见：
 

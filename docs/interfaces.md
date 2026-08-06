@@ -1,98 +1,99 @@
-# 命令与 HTTP 接口映射
+# 命令与接口映射
 
-此页是 ChatCRS 当前剩余 CLI 与 CRS HTTP/Admin API 的对齐表。它只描述已经注册、已经测试的命令；没有 HTTP/Admin endpoint 的服务端本机能力不在当前 CLI 中伪装实现。
+此页对齐当前 ChatCRS CLI surface 与其执行边界：外部管理命令映射 CRS HTTP/Admin API；`service` 是 server-local surface，只能在 CRS 服务器本机运行本机 `crs` 命令。
 
 ## 当前 CLI 树
 
 ```text
 chatcrs
 ├── health                         # GET /health
-├── admin                          # CRS Admin HTTP API 命令组
+├── admin                          # CRS Admin HTTP API command group
 │   ├── login                      # POST /web/auth/login
-│   ├── accounts                   # OpenAI/Codex 账号状态
+│   ├── accounts                   # OpenAI/Codex account state
 │   │   ├── usage                  # GET /admin/openai-accounts
 │   │   └── refresh-status         # POST /admin/openai-accounts/{account_id}/reset-status
-│   └── keys                       # CRS API key 元数据与统计
+│   └── keys                       # CRS API key metadata and statistics
 │       ├── list                   # GET /admin/api-keys + batch stats/last usage
-│       └── show                   # GET /admin/api-keys + batch stats/last usage 后按 id/name 过滤
-└── key                            # API-key-only 自查
-    └── info                       # GET /openai/key-info
+│       └── show                   # GET /admin/api-keys + batch stats/last usage, filtered by id/name
+├── key                            # API-key-only self inspection
+│   └── info                       # GET /openai/key-info
+└── service                        # server-local service lifecycle
+    ├── install                    # local crs install; dry-run by default
+    ├── update                     # local crs update; dry-run by default
+    ├── start                      # local crs start; dry-run by default
+    ├── stop                       # local crs stop; dry-run by default
+    ├── restart                    # local crs restart; dry-run by default
+    ├── status                     # local crs status; read-only execution by default
+    ├── switch-branch              # local crs switch-branch; dry-run by default
+    └── update-pricing             # local crs update-pricing; dry-run by default
 ```
 
-## CLI 到 HTTP endpoint
+## CLI 到 HTTP / local 接口
 
-| CLI | HTTP endpoint | 认证来源 | 是否写入 | Python API |
+| CLI | Interface | Authentication source | Mutation | Python API |
 |---|---|---|---|---|
-| `chatcrs health` | `GET /health` | 无；只需要 `CRS_API_BASE` 或 `--base-url` | 否 | `chatcrs.local.health_check` |
-| `chatcrs admin login` | `POST /web/auth/login` | `CRS_USERNAME` + `CRS_PASSWORD`，或显式参数 | 否；只验证登录并报告 token 是否存在 | `CrsHttpClient.login` |
-| `chatcrs admin accounts usage` | `GET /admin/openai-accounts` | Admin bearer token；可由 login/profile 解析 | 否 | `CrsHttpClient.accounts_usage` |
-| `chatcrs admin accounts refresh-status` | `POST /admin/openai-accounts/{account_id}/reset-status` | Admin bearer token | 默认否；只有 `--execute` 才调用 endpoint | `CrsHttpClient.reset_openai_account_status` |
-| `chatcrs admin keys list` | `GET /admin/api-keys`、可选 `POST /admin/api-keys/batch-stats`、`POST /admin/api-keys/batch-last-usage` | Admin bearer token | 否 | `CrsHttpClient.api_keys` |
-| `chatcrs admin keys show` | `GET /admin/api-keys`、可选 `POST /admin/api-keys/batch-stats`、`POST /admin/api-keys/batch-last-usage` | Admin bearer token | 否 | `CrsHttpClient.api_key_detail` |
-| `chatcrs key info` | `GET /openai/key-info` | CRS caller API key：`CRS_API_KEY` 或 `--api-key` | 否 | `CrsHttpClient.key_info` |
+| `chatcrs health` | `GET /health` | None; only `CRS_API_BASE` or `--base-url` | No | `chatcrs.local.health_check` |
+| `chatcrs admin login` | `POST /web/auth/login` | `CRS_USERNAME` + `CRS_PASSWORD`, or explicit options | No durable mutation; verifies login and reports token presence | `CrsHttpClient.login` |
+| `chatcrs admin accounts usage` | `GET /admin/openai-accounts` | Admin bearer token, resolved from profile/login | No | `CrsHttpClient.accounts_usage` |
+| `chatcrs admin accounts refresh-status` | `POST /admin/openai-accounts/{account_id}/reset-status` | Admin bearer token | No by default; calls endpoint only with `--execute` | `CrsHttpClient.reset_openai_account_status` |
+| `chatcrs admin keys list` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_keys` |
+| `chatcrs admin keys show` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_key_detail` |
+| `chatcrs key info` | `GET /openai/key-info` | Caller CRS API key: `CRS_API_KEY` or `--api-key` | No | `CrsHttpClient.key_info` |
+| `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service start` | local `crs start` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service stop` | local `crs stop` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service restart` | local `crs restart` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service status` | local `crs status` via `local_command` | Current server shell | Read-only local execution by default | `chatcrs.service.run_service_action` |
+| `chatcrs service switch-branch` | local `crs switch-branch <branch>` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+| `chatcrs service update-pricing` | local `crs update-pricing` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 
-## 配置解析边界
+## 配置边界
 
-| 配置字段 | 作用 | 使用命令 |
+| Field / option | Purpose | Used by |
 |---|---|---|
-| `CRS_API_BASE` | CRS HTTP base URL | 全部命令 |
-| `CRS_API_KEY` | caller API key | `chatcrs key info` |
-| `CRS_USERNAME` | admin username | `chatcrs admin login` 及需要登录换 token 的 admin 命令 |
-| `CRS_PASSWORD` | admin password | `chatcrs admin login` 及需要登录换 token 的 admin 命令 |
-| `CRS_ACCESS_TOKEN` | admin bearer token | `chatcrs admin ...` |
+| `CRS_API_BASE` | CRS HTTP base URL | HTTP/Admin/API-key commands |
+| `CRS_API_KEY` | Caller API key | `chatcrs key info` |
+| `CRS_USERNAME` | Admin username | `chatcrs admin login` and admin commands that need a login-derived token |
+| `CRS_PASSWORD` | Admin password | `chatcrs admin login` and admin commands that need a login-derived token |
+| `CRS_ACCESS_TOKEN` | Admin bearer token | `chatcrs admin ...` |
+| `--app-dir` | Local CRS app directory on the current server | `chatcrs service ...` |
+| `--crs-command` | Local CRS executable or command name | `chatcrs service ...` |
 
-ChatEnv namespace 固定为 `CRS`：`~/.chatarch/envs/CRS/<profile>.env`。当前包内不维护第二套服务目标 profile。
+The canonical ChatEnv namespace is `CRS`: `~/.chatarch/envs/CRS/<profile>.env`. Service-local options are CLI/Python parameters, not a second ChatEnv target namespace.
 
-## 当前 HTTP 接口覆盖
+## Service-local contract
 
-<div class="grid cards" markdown>
+`chatcrs service ...` exists because some lifecycle/install/update/status capabilities are not HTTP resources. The command must be installed on and executed inside the CRS server environment that owns the process and checkout.
 
--   **Health**
+- It does not use SSH transport or host aliases.
+- It does not maintain another server from outside.
+- It does not read legacy service-target environment fields or profile directories.
+- For outside-server operations, use HTTP/Admin API commands. If the CRS app needs remote lifecycle control, add a CRS HTTP/Admin endpoint or a restricted host-side agent instead of hiding remote execution in ChatCRS.
 
-    ---
+## Current HTTP coverage
 
-    `GET /health` 用于确认目标 CRS 服务是否响应，输出只读 health 摘要。
+- `GET /health`
+- `POST /web/auth/login`
+- `GET /admin/openai-accounts`
+- `POST /admin/openai-accounts/{account_id}/reset-status`
+- `GET /admin/api-keys`
+- `POST /admin/api-keys/batch-stats`
+- `POST /admin/api-keys/batch-last-usage`
+- `GET /openai/key-info`
 
--   **Admin login**
+## Explicit gaps / out-of-scope task surfaces
 
-    ---
-
-    `POST /web/auth/login` 用于验证管理员凭据并获得 admin bearer token；ChatCRS 输出只报告 token presence，不打印 token。
-
--   **Accounts**
-
-    ---
-
-    `GET /admin/openai-accounts` 读取账号 usage、状态和调度信息；`POST /admin/openai-accounts/{account_id}/reset-status` 仅在 `--execute` 时重置 CRS 本地状态。
-
--   **API keys**
-
-    ---
-
-    `GET /admin/api-keys` 读取 key metadata；`POST /admin/api-keys/batch-stats` 和 `POST /admin/api-keys/batch-last-usage` 补统计和最近使用归因。
-
--   **Caller key info**
-
-    ---
-
-    `GET /openai/key-info` 用 caller CRS API key 自查，不需要管理员账号。
-
-</div>
-
-## 明确缺口
-
-以下能力当前没有已确认的 CRS HTTP/Admin endpoint，因此 ChatCRS 当前不注册对应普通命令：
-
-| 缺口 | 当前处理方式 |
+| Gap or removed surface | Current handling |
 |---|---|
-| service lifecycle：status/update/restart/start/stop | 报告缺口；需要新增受限 HTTP 管理 endpoint 或单独 host-agent 设计 |
-| API key create/update/delete/restore/tag/index | 需要先确认或新增 Admin HTTP endpoint，再按 dry-run/execute 和脱敏审计规则实现 |
-| account add/delete/toggle/schedulable/test | 需要先确认或新增 Admin HTTP endpoint；不能用本机脚本或数据库直写代替 |
-| topology/edge/Redis/Nginx/release/cutover | 这是部署/运维层能力，不属于当前普通 CRS HTTP client surface |
+| API key create/update/delete/restore/tag/index | Confirm or add Admin HTTP endpoints first, then implement with dry-run/execute and redacted audit rules |
+| account add/delete/toggle/schedulable/test | Confirm or add Admin HTTP endpoints first; do not substitute local scripts or direct database writes for external management |
+| topology/edge/Redis/Nginx/release/cutover | Deployment/operations-layer work, outside the ordinary CRS HTTP client and outside this service restore |
+| verify/image/debug surfaces | Kept out of ChatCRS package CLI; handle as separate acceptance/proxy-site/runbook tasks when scoped |
 
-## 更新规则
+## Update rules
 
-- 新增 CLI 命令前，先确认真实 HTTP/Admin endpoint，并把 endpoint 写入本页。
-- 没有 endpoint 的能力，文档必须写成缺口或外部 host-agent 设计，不得写成已实现 CLI。
-- 新增或删除命令后，同步更新 `docs/cli.md`、本页、README、CHANGELOG 和 CLI/docs alignment tests。
-- 所有输出必须保持脱敏：API key、token、password、OAuth 凭据只报告 presence、计数、状态或 `[REDACTED]`。
+- Every registered leaf must appear on this page with its interface, auth source, mutation boundary, and Python API.
+- HTTP/Admin commands must name the endpoint.
+- Service commands must remain server-local and explicit about `local_command` execution.
+- Keep all outputs redacted: API keys, tokens, passwords, and OAuth credentials are reported only as presence, counts, status, or `[REDACTED]`.
