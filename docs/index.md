@@ -2,7 +2,46 @@
 
 ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin API、普通 API key 自查和 health；`service` 域只在 CRS 服务器本机运行本机 `crs` 命令。
 
-## 选择入口
+## 文档栏目
+
+<div class="grid cards" markdown>
+
+-   **管理面**
+
+    ---
+
+    从真实 CLI 树进入，查看 HTTP/Admin API、API-key-only 自查和本机 service 命令。
+
+    [查看命令树](cli.md)
+    [查看接口映射](interfaces.md)
+
+-   **配置**
+
+    ---
+
+    只保留一套 CRS ChatEnv profile，说明 `CRS_*` 字段、脱敏规则和本机 service 目标。
+
+    [查看配置](configuration.md)
+
+-   **运维**
+
+    ---
+
+    区分包内可执行能力、服务器本机维护入口，以及仍需 runbook 或新 API 的生产动作。
+
+    [查看生产维护](production-maintenance.md)
+
+-   **开发**
+
+    ---
+
+    查看本地安装、测试、文档构建、发布和版本约束。
+
+    [查看开发与发布](development.md)
+
+</div>
+
+## 常用入口
 
 <div class="grid cards" markdown>
 
@@ -12,7 +51,7 @@ ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin A
 
     查询 OpenAI/Codex 账号 usage、CRS API key 统计，以及默认 dry-run 的账号状态 reset。
 
-    [打开 CLI 树](cli.md#remote-admin-and-api-key)
+    [打开管理员命令](cli.md#remote-admin-and-api-key)
 
 -   **API-key-only 自查**
 
@@ -30,11 +69,11 @@ ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin A
 
     [打开接口映射](interfaces.md)
 
--   **Server-local service**
+-   **本机 service**
 
     ---
 
-    `service` 域已经恢复，但只用于在 CRS 服务器本机运行 install/update/status/restart 等本机 `crs` 命令。
+    `service` 域只用于在 CRS 服务器本机运行 install/update/status/restart 等本机 `crs` 命令。
 
     [查看 service 边界](cli.md#server-local-service)
 
@@ -67,33 +106,3 @@ ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin A
 - 变更动作必须显式 `--execute`。
 - 外部管理必须走 CRS HTTP/Admin API；没有 endpoint 的 lifecycle 能力只能新增 API/agent，或在服务器本机跑 `chatcrs service ...`。
 - API key、token、password、OAuth 凭据不得进入命令参数或文档输出。
-
-## 下一步
-
-<div class="grid cards" markdown>
-
--   **完整 CLI 树**
-
-    ---
-
-    从实际 Click command registration 回读，并标注命令边界。
-
-    [打开 CLI 树](cli.md)
-
--   **配置与目标**
-
-    ---
-
-    查看单一 CRS ChatEnv profile、环境变量字段和敏感信息规则。
-
-    [打开配置](configuration.md)
-
--   **生产维护**
-
-    ---
-
-    了解为什么生产更新、edge work 和 release/cutover 仍停留在 task-runbook 层。
-
-    [打开生产维护](production-maintenance.md)
-
-</div>

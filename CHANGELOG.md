@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Rework the MkDocs navigation into top-level documentation sections and make the homepage a card-based hub for management, configuration, operations, and development entry points.
+
 ## 2026-08-06 - 0.2.2
 
 ### Changed
