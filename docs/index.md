@@ -1,8 +1,8 @@
 # ChatCRS
 
-ChatCRS 是 ChatArch 的 CRS 远程运维 CLI。当前注册命令面聚焦远程管理员查询、普通 API key 自查、官方 `crs` lifecycle 的受控包装、health 和只读 inspect。
+ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦远程管理员 HTTP API 查询、普通 API key 自查和 health。
 
-## 入口选择
+## 选择入口
 
 <div class="grid cards" markdown>
 
@@ -10,80 +10,78 @@ ChatCRS 是 ChatArch 的 CRS 远程运维 CLI。当前注册命令面聚焦远�
 
     ---
 
-    查看 OpenAI/Codex 账号 usage、CRS API key 统计和账号状态刷新计划。
+    查询 OpenAI/Codex 账号 usage、CRS API key 统计，以及默认 dry-run 的账号状态 reset。
 
-    [查看 CLI 树](cli.md#remote-admin-and-api-key)
+    [打开 CLI 树](cli.md#remote-admin-and-api-key)
 
--   **普通 API key 自查**
-
-    ---
-
-    不使用管理员登录，只凭 CRS API key 查询自己的可用性、绑定和 usage 摘要。
-
-    [查看 key-only 命令](cli.md#api-key-only)
-
--   **Service 生命周期管理**
+-   **API-key-only 自查**
 
     ---
 
-    吸收官方 `/usr/bin/crs` 的 `install/update/start/stop/restart/switch-branch/update-pricing` 语义，默认只输出计划。
+    不需要管理员登录，直接查询当前 CRS API key 的安全摘要。
 
-    [查看 service 命令](cli.md#service-lifecycle)
+    [打开 key-only 命令](cli.md#api-key-only)
+
+-   **服务端本机候选能力**
+
+    ---
+
+    lifecycle、topology、edge、release/cutover 等能力当前不注册；它们需要服务端本机权限或 host-agent 设计。
+
+    [查看候选能力边界](cli.md#server-local-candidates)
 
 -   **安全边界**
 
     ---
 
-    Web edge、正式切换、图片能力验收和隔离调试 runtime 不再作为包内注册命令；需要时按当前任务 runbook 由模型操作。
+    没有 HTTP/Admin endpoint 的动作应报告能力缺口，不用远端执行或本地脚本补洞。
 
-    [查看安全边界](cli.md#safety-boundaries)
+    [打开安全边界](cli.md#safety-boundaries)
 
 </div>
 
-## 当前能力地图
+## 能力地图
 
 | 场景 | 已实现入口 | 默认行为 |
 |---|---|---|
-| CRS health | `chatcrs health` | 只读 |
-| 拓扑摘要 | `chatcrs inspect` | 只读 |
-| 管理员账号 usage | `chatcrs admin accounts usage` | HTTPS Admin API，只输出脱敏摘要 |
-| 管理员账号状态刷新 | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 才调用 CRS reset-status |
-| 管理员 API key 统计 | `chatcrs admin keys list`, `chatcrs admin keys show` | 默认脱敏，可带统计 |
-| 普通 API key 查询 | `chatcrs key info` | 不需要管理员登录 |
-| 官方 `crs` lifecycle | `chatcrs service ...` | 默认 plan；`--execute` 才 SSH 执行 |
+| CRS health | `chatcrs health` | 只读 HTTP |
+| Admin account usage | `chatcrs admin accounts usage` | HTTP Admin API，脱敏摘要 |
+| Admin account status refresh | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 调 CRS reset-status endpoint |
+| Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | 默认脱敏，可选 stats |
+| API-key-only info | `chatcrs key info` | 不需要管理员登录 |
 
 ## 安全默认值
 
-- 查看类命令返回 `mutated=false` 或只输出状态。
-- 写操作必须显式 `--execute`。
-- `chatcrs service` 通过 `--ssh-alias`、`--app-dir` 和 `--crs-command` 锁定目标；stdout/stderr 在渲染前脱敏。
-- API key、token、密码和 OAuth 凭据不得进入命令行参数或文档输出。
+- Inspection commands 不修改远端状态。
+- 变更动作必须显式 `--execute`。
+- 没有 CRS HTTP/Admin endpoint 的管理动作，当前 CLI 不注册。
+- API key、token、password、OAuth 凭据不得进入命令参数或文档输出。
 
 ## 下一步
 
 <div class="grid cards" markdown>
 
--   **完整 CLI 命令树**
+-   **完整 CLI 树**
 
     ---
 
-    从实际 Click 注册命令对齐，包含每个已实现命令的右侧注释和状态边界。
+    从实际 Click command registration 回读，并标注命令边界。
 
-    [打开 CLI 命令树](cli.md)
+    [打开 CLI 树](cli.md)
 
 -   **配置与目标**
 
     ---
 
-    查看 ChatEnv/环境变量字段、remote target 和 service lifecycle 参数。
+    查看单一 CRS ChatEnv profile、环境变量字段和敏感信息规则。
 
-    [打开配置与目标](configuration.md)
+    [打开配置](configuration.md)
 
 -   **生产维护**
 
     ---
 
-    理解生产更新、Nginx/edge 操作和受控 release/cutover 流程为什么保留在任务 runbook 层。
+    了解为什么生产更新、edge work 和 release/cutover 仍停留在 task-runbook 层。
 
     [打开生产维护](production-maintenance.md)
 

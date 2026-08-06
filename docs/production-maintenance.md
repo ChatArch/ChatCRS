@@ -3,12 +3,24 @@
 ## 当前包内能力
 
 ```bash
-chatcrs-production health --json-output
-chatcrs inspect --json-output
-chatcrs service update --ssh-alias tencent.am --app-dir /home/zhihong/claude-relay-service/app --json-output
+chatcrs health --base-url https://crs.example.com --json-output
+chatcrs admin accounts usage --profile admin --json-output
+chatcrs admin keys list --profile admin --include-stats --json-output
 ```
 
-这些入口不会写 Nginx、不 reload、不停服务；`service` 默认只输出计划，只有显式 `--execute` 才通过 SSH 执行官方 `crs ...`。
+这些入口只通过 CRS HTTP/API 工作。它们不会写 Nginx、不 reload、不停服务、不读取部署目录。
+
+## 当前不注册的服务端本机能力
+
+以下能力可能有用，但当前 RESTful/Admin API 没有对应 endpoint，且通常需要服务端本机权限：
+
+- service install/update/start/stop/restart/status；
+- branch switching 或 pricing data update；
+- process/port/topology/edge doctor；
+- Redis snapshot/keyspace inventory；
+- release/cutover/rollback orchestration。
+
+这些能力后续若要加回，应先设计明确的 server-local/host-agent 边界、权限模型、审计产物和测试，而不是混入当前 HTTP 管理 CLI。
 
 ## 不要直接使用上游 `crs update`
 

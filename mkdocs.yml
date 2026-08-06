@@ -1,5 +1,5 @@
 site_name: ChatCRS 文档
-site_description: Safe CRS remote operations, admin inspection, and lifecycle management
+site_description: HTTP/API-first CRS management helpers for ChatArch
 site_url: https://arch.gh.wzhecnu.cn/ChatCRS/
 repo_url: https://github.com/ChatArch/ChatCRS
 repo_name: ChatArch/ChatCRS

@@ -14,7 +14,9 @@
 
 # ChatCRS
 
-ChatCRS is ChatArch's remote CRS operations CLI. It provides remote CRS admin/API-key inspection, guarded CRS service lifecycle management, health, and read-only topology summaries. Web-edge work, formal switching, image capability acceptance, and isolated debug-runtime operations are not registered package commands; the model handles them from the active task runbook when needed.
+ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The current registered commands cover CRS HTTP health, administrator HTTP API inspection/status operations, and CRS API-key self checks.
+
+Host lifecycle, process management, Nginx/edge work, Redis snapshots, release/cutover workflows, debug runtimes, and image capability acceptance are not exposed as package commands today. They are server-local operations or task-runbook workflows; if they are reintroduced later, they must be designed as explicit server-local/host-agent capabilities rather than ordinary HTTP management commands.
 
 ## Install and develop
 
@@ -40,42 +42,44 @@ Documentation: https://arch.gh.wzhecnu.cn/ChatCRS/
 ```text
 chatcrs
 ├── health
-├── inspect
 ├── admin login
 ├── admin accounts usage / refresh-status
 ├── admin keys list / show
-├── key info
-├── service install / update / start / stop / restart
-└── service status / switch-branch / update-pricing
+└── key info
 ```
 
 ## Remote admin and API key
 
 ```bash
-chatcrs admin login --json-output
-chatcrs admin accounts usage --json-output
-chatcrs admin accounts refresh-status <account_id> --json-output
-chatcrs admin accounts refresh-status <account_id> --execute --json-output
-chatcrs admin keys list --include-stats --json-output
-chatcrs admin keys show <key_id_or_name> --json-output
-chatcrs key info --json-output
+chatcrs health --base-url https://crs.example.com --json-output
+chatcrs admin login --profile admin --json-output
+chatcrs admin accounts usage --profile admin --json-output
+chatcrs admin accounts refresh-status <account_id> --profile admin --json-output
+chatcrs admin accounts refresh-status <account_id> --profile admin --execute --json-output
+chatcrs admin keys list --profile admin --include-stats --json-output
+chatcrs admin keys show <key_id_or_name> --profile admin --json-output
+chatcrs key info --profile admin --json-output
 ```
 
-## Service lifecycle
+## Configuration
 
-```bash
-chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --json-output
+ChatCRS uses one CRS ChatEnv profile namespace. By default it reads `~/.chatarch/envs/CRS/admin.env`; use `--profile` for another profile.
 
-chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
+Canonical fields:
+
+```text
+CRS_API_BASE
+CRS_API_KEY
+CRS_USERNAME
+CRS_PASSWORD
+CRS_ACCESS_TOKEN
 ```
 
-`chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` absorbs official `crs` management semantics. It prints a remote execution plan by default; only `--execute` runs the official `crs ...` command through SSH in the target app directory. Captured stdout/stderr are redacted before rendering.
-
-Service target defaults can live in the ChatEnv `Chatcrs` active profile (`~/.chatarch/envs/Chatcrs/.env`): `CHATCRS_SSH_ALIAS`, `CHATCRS_APP_DIR`, and `CHATCRS_CRS_COMMAND`. Resolution order is explicit CLI options > process environment variables > ChatEnv profile > package defaults.
+Sensitive fields should live only in ChatEnv or the process environment, never in command arguments, documentation, PR bodies, or logs. Profile files should use `0600` permissions.
 
 ## Production safety
 
-ChatCRS does not directly execute production traffic switching or edge-configuration changes. Production updates remain in the reviewed, dry-run-by-default release/cutover workflow.
+ChatCRS does not directly execute production traffic switching, service process control, or edge-configuration changes. Production updates remain in the reviewed, dry-run-by-default release/cutover workflow.
 
 See:
 
