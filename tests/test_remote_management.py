@@ -307,3 +307,15 @@ def test_api_key_only_cli_reports_key_info_without_admin_credentials():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_api_key_only_help_does_not_advertise_admin_credentials():
+    result = CliRunner().invoke(main, ["key", "info", "--help"])
+
+    assert result.exit_code == 0
+    assert "--api-key" in result.output
+    assert "--base-url" in result.output
+    assert "--path" in result.output
+    assert "--username" not in result.output
+    assert "--password" not in result.output
+    assert "--admin-token" not in result.output

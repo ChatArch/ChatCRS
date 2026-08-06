@@ -45,11 +45,24 @@ PUBLIC_DOCS = (
     "docs/index.en.md",
     "docs/cli.md",
     "docs/cli.en.md",
+    "docs/interfaces.md",
+    "docs/interfaces.en.md",
     "docs/configuration.md",
     "docs/configuration.en.md",
     "docs/production-maintenance.md",
     "docs/production-maintenance.en.md",
 )
+
+EXPECTED_HTTP_INTERFACES = {
+    "GET /health",
+    "POST /web/auth/login",
+    "GET /admin/openai-accounts",
+    "POST /admin/openai-accounts/{account_id}/reset-status",
+    "GET /admin/api-keys",
+    "POST /admin/api-keys/batch-stats",
+    "POST /admin/api-keys/batch-last-usage",
+    "GET /openai/key-info",
+}
 
 FORBIDDEN_PUBLIC_DOC_FRAGMENTS = (
     "--ssh-alias",
@@ -102,6 +115,22 @@ def test_english_cli_reference_covers_only_registered_leaf_commands():
     stale = sorted(command for command in REMOVED_OPERATIONAL_CLI_LEAVES if command in docs)
     assert not missing
     assert not stale
+
+
+def test_interface_reference_maps_current_cli_to_http_endpoints():
+    docs = _reference_text("docs/interfaces.md")
+    missing_commands = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
+    missing_endpoints = sorted(endpoint for endpoint in EXPECTED_HTTP_INTERFACES if endpoint not in docs)
+    assert not missing_commands
+    assert not missing_endpoints
+
+
+def test_english_interface_reference_maps_current_cli_to_http_endpoints():
+    docs = _reference_text("docs/interfaces.en.md")
+    missing_commands = sorted(command for command in EXPECTED_CLI_LEAVES if command not in docs)
+    missing_endpoints = sorted(endpoint for endpoint in EXPECTED_HTTP_INTERFACES if endpoint not in docs)
+    assert not missing_commands
+    assert not missing_endpoints
 
 
 def test_public_docs_do_not_advertise_ssh_or_real_host_paths():

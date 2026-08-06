@@ -22,6 +22,14 @@ ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The registered command 
 
     [Open key-only commands](cli.md#api-key-only)
 
+-   **CLI and HTTP interface map**
+
+    ---
+
+    Review the HTTP endpoint, authentication source, mutation boundary, and Python API behind each of the seven registered CLI leaves.
+
+    [Open the interface map](interfaces.md)
+
 -   **Server-local candidate capabilities**
 
     ---
@@ -49,6 +57,8 @@ ChatCRS is ChatArch's HTTP/API-first CRS management CLI. The registered command 
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls the CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted by default, optional stats |
 | API-key-only info | `chatcrs key info` | No administrator login |
+
+For the endpoint-level map, see [CLI and HTTP interface map](interfaces.md).
 
 ## Safety defaults
 

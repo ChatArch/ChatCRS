@@ -22,6 +22,14 @@ ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦�
 
     [打开 key-only 命令](cli.md#api-key-only)
 
+-   **命令与接口映射**
+
+    ---
+
+    查看当前 7 个 CLI leaf 对应的 HTTP endpoint、认证来源、写入边界和 Python API。
+
+    [打开接口映射](interfaces.md)
+
 -   **服务端本机候选能力**
 
     ---
@@ -49,6 +57,8 @@ ChatCRS 是 ChatArch 的 CRS HTTP/API 管理 CLI。当前注册命令面聚焦�
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 调 CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | 默认脱敏，可选 stats |
 | API-key-only info | `chatcrs key info` | 不需要管理员登录 |
+
+接口级映射见：[命令与 HTTP 接口映射](interfaces.md)。
 
 ## 安全默认值
 

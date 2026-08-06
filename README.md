@@ -84,5 +84,6 @@ ChatCRS 当前不直接执行生产切流、服务进程控制或 edge 配置变
 更多内容见：
 
 - `docs/cli.md`
+- `docs/interfaces.md`
 - `docs/configuration.md`
 - `docs/production-maintenance.md`

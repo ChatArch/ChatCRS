@@ -12,6 +12,10 @@
 - Document server-local lifecycle, topology, edge, Redis, and release/cutover
   workflows as candidate capabilities that need an explicit server-local or
   host-agent design before they can be reintroduced.
+- Add a CLI-to-HTTP interface map that ties every registered CLI leaf to its
+  CRS endpoint, auth source, mutation boundary, and importable Python API.
+- Keep API-key-only `chatcrs key info --help` focused on key/base-url/profile
+  options and wrap health connection failures as clean Click errors.
 
 ## 2026-08-04 - 0.2.1
 

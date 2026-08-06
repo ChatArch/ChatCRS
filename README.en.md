@@ -84,5 +84,6 @@ ChatCRS does not directly execute production traffic switching, service process 
 See:
 
 - `docs/cli.md`
+- `docs/interfaces.md`
 - `docs/configuration.md`
 - `docs/production-maintenance.md`

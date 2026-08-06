@@ -37,3 +37,18 @@ def test_health_command_reads_crs_api_base(monkeypatch):
     assert payload["ok"] is True
     assert payload["base_url"] == "https://crs.example.test"
     assert payload["mutated"] is False
+
+
+def test_health_command_wraps_connection_failures_as_click_errors(monkeypatch):
+    import chatcrs.local as local
+
+    def fail_health(base_url):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(local, "health_check", fail_health)
+
+    result = CliRunner().invoke(main, ["health", "--base-url", "http://127.0.0.1:9"])
+
+    assert result.exit_code == 1
+    assert result.exception is not None
+    assert "Error: connection refused" in result.output

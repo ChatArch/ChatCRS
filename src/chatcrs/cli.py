@@ -27,7 +27,10 @@ def main() -> None:
 def health_command(base_url: str | None, json_output: bool) -> None:
     """Verify the CRS /health endpoint."""
 
-    payload = local_management.health_check(base_url)
+    try:
+        payload = local_management.health_check(base_url)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
     if json_output:
         _echo_json(payload)
     else:
@@ -61,6 +64,14 @@ def _common_remote_options(function):
     function = click.option("--password", default=None, help="Admin password. Prefer the CRS ChatEnv profile for real use.")(function)
     function = click.option("--username", default=None, help="Admin username. Prefer the CRS ChatEnv profile for real use.")(function)
     function = click.option("--api-key", default=None, help="CRS API key for non-admin endpoints. Prefer the CRS ChatEnv profile.")(function)
+    function = click.option("--base-url", default=None, help="Remote CRS base URL. Defaults to CRS_API_BASE in the CRS ChatEnv profile.")(function)
+    function = click.option("--profile", default="admin", show_default=True, help="CRS ChatEnv profile under envs/CRS/<profile>.env.")(function)
+    return function
+
+
+def _api_key_remote_options(function):
+    function = click.option("--timeout", type=float, default=20.0, show_default=True)(function)
+    function = click.option("--api-key", default=None, help="CRS API key. Defaults to CRS_API_KEY in the CRS ChatEnv profile.")(function)
     function = click.option("--base-url", default=None, help="Remote CRS base URL. Defaults to CRS_API_BASE in the CRS ChatEnv profile.")(function)
     function = click.option("--profile", default="admin", show_default=True, help="CRS ChatEnv profile under envs/CRS/<profile>.env.")(function)
     return function
@@ -275,16 +286,13 @@ def key_group() -> None:
 
 
 @key_group.command(name="info")
-@_common_remote_options
+@_api_key_remote_options
 @click.option("--path", "info_path", default="/openai/key-info", show_default=True, help="CRS key-info endpoint path.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def key_info_command(
     profile: str,
     base_url: str | None,
     api_key: str | None,
-    username: str | None,
-    password: str | None,
-    admin_token: str | None,
     timeout: float,
     info_path: str,
     json_output: bool,
@@ -296,9 +304,9 @@ def key_info_command(
             profile=profile,
             base_url=base_url,
             api_key=api_key,
-            username=username,
-            password=password,
-            admin_token=admin_token,
+            username=None,
+            password=None,
+            admin_token=None,
             timeout=timeout,
         ).key_info(path=info_path)
     except (OSError, ValueError, remote_management.CrsApiError) as exc:
