@@ -71,6 +71,8 @@ chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude
 
 `chatcrs service install/update/start/stop/restart/switch-branch/update-pricing` 吸收官方 `crs` 管理语义；默认只输出远程执行计划，只有显式 `--execute` 才通过 SSH 在目标 app 目录执行官方 `crs ...`。stdout/stderr 会做敏感信息脱敏。
 
+Service target 默认值可放在 ChatEnv `Chatcrs` active profile（`~/.chatarch/envs/Chatcrs/.env`）：`CHATCRS_SSH_ALIAS`、`CHATCRS_APP_DIR`、`CHATCRS_CRS_COMMAND`。解析顺序为显式 CLI 参数 > 进程环境变量 > ChatEnv profile > 包内默认值。
+
 ## 生产安全
 
 ChatCRS 当前不直接执行生产切流或 edge 配置变更。生产更新继续使用经过审核、默认 dry-run 的独立 release/cutover 流程。

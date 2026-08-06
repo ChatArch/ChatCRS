@@ -154,7 +154,9 @@ chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude
 chatcrs service update   --ssh-alias tencent.am   --app-dir /home/zhihong/claude-relay-service/app   --execute   --json-output
 ```
 
-环境变量默认值：
+默认值解析顺序：显式 CLI 参数 > 进程环境变量 > ChatEnv `Chatcrs` active profile > 包内默认值。
+
+可放入 ChatEnv `~/.chatarch/envs/Chatcrs/.env` 或进程环境的字段：
 
 ```text
 CHATCRS_SSH_ALIAS   # example: tencent.am
