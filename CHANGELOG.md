@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2026-08-11 - 0.2.4
+
+### Added
+
+- Add a runtime CRS Admin session token store under `~/.chatarch/tokens/CRS/<profile>.json`, parallel to `envs/CRS/<profile>.env`.
+- Add `chatcrs admin token status`, `chatcrs admin token refresh`, and `chatcrs admin token clear` commands with redacted JSON output and dry-run deletion by default.
+- Add `chatcrs admin login --save-token` for explicitly saving a fresh login-derived Admin session token.
+
+### Changed
+
+- Admin HTTP requests now prefer the runtime token file over legacy `CRS_ACCESS_TOKEN`, fall back to username/password login when needed, and retry once after a 401 by refreshing the token file.
+- Document Env-vs-token state separation so stable CRS configuration stays in ChatEnv while short-lived Admin session tokens live in the token store.
+
 ## 2026-08-10 - 0.2.3
 
 ### Added

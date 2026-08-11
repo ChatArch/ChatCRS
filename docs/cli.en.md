@@ -11,7 +11,11 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 ├── --tree  # Print the registered command tree.
 ├── health [--base-url <BASE-URL>] [--json-output]  # Verify the CRS /health endpoint.
 ├── admin  # Remote CRS administrator operations via HTTPS Admin API.
-│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--save-token] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── token  # Manage cached CRS admin session tokens in the ChatArch token store.
+│   │   ├── status [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Show cached CRS admin token metadata without printing the token.
+│   │   ├── refresh [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Login and save a fresh CRS admin session token.
+│   │   └── clear [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Clear the cached CRS admin session token.
 │   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
 │   │   ├── usage [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
 │   │   └── refresh-status <ACCOUNT-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
@@ -36,7 +40,8 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | Capability | Implemented commands | Boundary |
 |---|---|---|
 | CRS health | `chatcrs health` | Read-only HTTP health summary |
-| Admin login | `chatcrs admin login` | Verifies credentials; reports token presence only |
+| Admin login | `chatcrs admin login` | Verifies credentials; reports token presence only; `--save-token` writes the runtime token store |
+| Admin token cache | `chatcrs admin token status`, `chatcrs admin token refresh`, `chatcrs admin token clear` | Manages short-lived Admin session tokens under `~/.chatarch/tokens/CRS/<profile>.json`; status output never prints tokens |
 | Account usage | `chatcrs admin accounts usage` | Admin HTTP API; redacted usage/status/scheduling summary |
 | Account status reset | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS reset-status; not an OAuth refresh-token force-refresh |
 | API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted key values, status, limits, stats, and last-usage summaries |
@@ -49,6 +54,9 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 |---|---|
 | `chatcrs health` | CRS health check |
 | `chatcrs admin login` | Admin login verification |
+| `chatcrs admin token status` | Cached Admin session token metadata |
+| `chatcrs admin token refresh` | Login and save a fresh Admin session token |
+| `chatcrs admin token clear` | Dry-run or delete cached Admin session token |
 | `chatcrs admin accounts usage` | Account usage inspection |
 | `chatcrs admin accounts refresh-status` | CRS account reset-status |
 | `chatcrs admin keys list` | API key list and statistics |
@@ -67,6 +75,11 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 
 ```bash
 chatcrs admin login --profile admin --json-output
+chatcrs admin login --profile admin --save-token --json-output
+chatcrs admin token status --profile admin --json-output
+chatcrs admin token refresh --profile admin --json-output
+chatcrs admin token clear --profile admin --json-output
+chatcrs admin token clear --profile admin --execute --json-output
 chatcrs admin accounts usage --profile admin --json-output
 chatcrs admin accounts refresh-status <account_id> --profile admin --json-output
 chatcrs admin accounts refresh-status <account_id> --profile admin --execute --json-output
@@ -120,4 +133,5 @@ They belong to special acceptance, debug runtime, edge/cutover runbooks, or prox
 - The outside-server CRS management surface is HTTP/Admin API.
 - The service surface runs only on the CRS server itself and does not maintain another server.
 - Any production mutation still requires explicit `--execute`, target verification, rollback boundary, and redacted output.
+- Env profiles keep stable configuration; short-lived Admin session tokens are cached under `~/.chatarch/tokens/CRS/<profile>.json` instead of frequently rewriting Env files.
 - API keys, tokens, passwords, and OAuth credentials must not appear in chat, docs, PR bodies, or command output.

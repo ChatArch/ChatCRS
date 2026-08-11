@@ -7,6 +7,9 @@ from chatcrs.config import ChatcrsConfig
 EXPECTED_CLI_LEAVES = {
     "chatcrs health",
     "chatcrs admin login",
+    "chatcrs admin token status",
+    "chatcrs admin token refresh",
+    "chatcrs admin token clear",
     "chatcrs admin accounts usage",
     "chatcrs admin accounts refresh-status",
     "chatcrs admin keys list",

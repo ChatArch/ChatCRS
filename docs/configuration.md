@@ -14,6 +14,19 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 | admin password | CRS 管理员密码 | 是 |
 | admin bearer/session token | CRS 管理员 bearer/session token | 是 |
 
+## Runtime token store
+
+短期 CRS Admin session token 不再作为主要配置写入 Env。ChatCRS 会使用与 Env profile 平行的 token store：
+
+```text
+~/.chatarch/envs/CRS/<profile>.env     # 稳定配置
+~/.chatarch/tokens/CRS/<profile>.json  # 动态 Admin session token
+```
+
+读取顺序是：显式 `--admin-token` > runtime token file > legacy `CRS_ACCESS_TOKEN` > 使用 username/password 登录。Admin API 返回 401 时，如果 profile 里有 username/password，ChatCRS 会重新登录、更新 token file，并重试一次。
+
+`chatcrs admin token status` 只输出 token 文件路径、存在性、是否过期、base URL 是否匹配等元数据；不会打印 token。`chatcrs admin token clear` 默认 dry-run，必须加 `--execute` 才删除本地 token file。
+
 ## 本地/服务端能力边界
 
 当前配置只描述 CRS HTTP/API 连接与凭据。服务进程生命周期、部署目录、Nginx/edge、Redis、release/cutover 等 host-local 信息不属于这套 profile。

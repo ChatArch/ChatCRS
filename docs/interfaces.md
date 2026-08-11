@@ -9,6 +9,10 @@ chatcrs
 ├── health                         # GET /health
 ├── admin                          # CRS Admin HTTP API command group
 │   ├── login                      # POST /web/auth/login
+│   ├── token                      # local runtime Admin session token cache
+│   │   ├── status                 # token file metadata, no token output
+│   │   ├── refresh                # POST /web/auth/login, then save token file
+│   │   └── clear                  # dry-run/delete local token file
 │   ├── accounts                   # OpenAI/Codex account state
 │   │   ├── usage                  # GET /admin/openai-accounts
 │   │   └── refresh-status         # POST /admin/openai-accounts/{account_id}/reset-status
@@ -33,7 +37,10 @@ chatcrs
 | CLI | Interface | Authentication source | Mutation | Python API |
 |---|---|---|---|---|
 | `chatcrs health` | `GET /health` | None; configured base URL field or `--base-url` | No | health-check helper |
-| `chatcrs admin login` | `POST /web/auth/login` | configured admin identity/password fields, or explicit options | No durable mutation; verifies login and reports token presence | `CrsHttpClient.login` |
+| `chatcrs admin login` | `POST /web/auth/login` | configured admin identity/password fields, or explicit options | No durable mutation by default; `--save-token` writes the runtime token file | `CrsHttpClient.login` |
+| `chatcrs admin token status` | local token file read | CRS profile + runtime token store | No | `CrsTokenStore.status` |
+| `chatcrs admin token refresh` | `POST /web/auth/login`, then local token file write | Admin username/password | Writes `~/.chatarch/tokens/CRS/<profile>.json` | `CrsHttpClient.login(save_token=True)` |
+| `chatcrs admin token clear` | local token file delete | CRS profile + runtime token store | Dry-run by default; deletes only with `--execute` | `CrsTokenStore.clear` |
 | `chatcrs admin accounts usage` | `GET /admin/openai-accounts` | Admin bearer token, resolved from profile/login | No | `CrsHttpClient.accounts_usage` |
 | `chatcrs admin accounts refresh-status` | `POST /admin/openai-accounts/{account_id}/reset-status` | Admin bearer token | No by default; calls endpoint only with `--execute` | `CrsHttpClient.reset_openai_account_status` |
 | `chatcrs admin keys list` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_keys` |
@@ -56,11 +63,12 @@ chatcrs
 | caller API-key profile field | Caller API key | `chatcrs key info` |
 | admin identity profile field | Admin username | `chatcrs admin login` and admin commands that need a login-derived token |
 | admin password profile field | Admin password | `chatcrs admin login` and admin commands that need a login-derived token |
-| admin bearer/session token profile field | Admin bearer token | `chatcrs admin ...` |
+| admin bearer/session token profile field | Legacy Admin bearer token fallback | `chatcrs admin ...` |
+| runtime token file | Cached login-derived Admin session token | `chatcrs admin token ...` and Admin auto-refresh |
 | `--app-dir` | Local CRS app directory on the current server | `chatcrs service ...` |
 | `--crs-command` | Local CRS executable or command name | `chatcrs service ...` |
 
-The canonical ChatEnv namespace is `CRS`; public docs intentionally omit concrete secret-file paths. Service-local options are CLI/Python parameters, not a second ChatEnv target namespace.
+The canonical ChatEnv namespace is `CRS`; stable configuration lives in Env, while dynamic Admin session tokens live in the parallel token store. Public docs intentionally omit concrete secret values. Service-local options are CLI/Python parameters, not a second ChatEnv target namespace.
 
 ## Service-local contract
 

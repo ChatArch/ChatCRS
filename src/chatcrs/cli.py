@@ -172,6 +172,7 @@ def admin_group() -> None:
 
 @admin_group.command(name="login")
 @_common_remote_options
+@click.option("--save-token", is_flag=True, default=False, help="Persist the login session under ~/.chatarch/tokens/CRS/<profile>.json.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def admin_login_command(
     profile: str,
@@ -181,6 +182,7 @@ def admin_login_command(
     password: str | None,
     admin_token: str | None,
     timeout: float,
+    save_token: bool,
     json_output: bool,
 ) -> None:
     """Verify CRS admin login without printing the session token."""
@@ -195,13 +197,128 @@ def admin_login_command(
             admin_token=admin_token,
             timeout=timeout,
         )
-        payload = client.login()
+        payload = client.login(save_token=save_token)
     except (OSError, ValueError, remote_management.CrsApiError) as exc:
         raise click.ClickException(str(exc)) from exc
     if json_output:
         _echo_json(payload)
     else:
-        click.echo(f"ok={payload['ok']} status={payload['status']} token_present={payload['token_present']}")
+        click.echo(
+            f"ok={payload['ok']} status={payload['status']} token_present={payload['token_present']} "
+            f"token_saved={payload.get('token_saved', False)}"
+        )
+
+
+@admin_group.group(name="token")
+def admin_token_group() -> None:
+    """Manage cached CRS admin session tokens in the ChatArch token store."""
+
+
+@admin_token_group.command(name="status")
+@_common_remote_options
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def admin_token_status_command(
+    profile: str,
+    base_url: str | None,
+    api_key: str | None,
+    username: str | None,
+    password: str | None,
+    admin_token: str | None,
+    timeout: float,
+    json_output: bool,
+) -> None:
+    """Show cached CRS admin token metadata without printing the token."""
+
+    try:
+        payload = _remote_client(
+            profile=profile,
+            base_url=base_url,
+            api_key=api_key,
+            username=username,
+            password=password,
+            admin_token=admin_token,
+            timeout=timeout,
+        ).token_store.status()
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} profile={payload['profile']} token_file_exists={payload['token_file_exists']} "
+            f"token_present={payload['token_present']} base_url_match={payload['base_url_match']} expired={payload['expired']}"
+        )
+
+
+@admin_token_group.command(name="refresh")
+@_common_remote_options
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def admin_token_refresh_command(
+    profile: str,
+    base_url: str | None,
+    api_key: str | None,
+    username: str | None,
+    password: str | None,
+    admin_token: str | None,
+    timeout: float,
+    json_output: bool,
+) -> None:
+    """Login and save a fresh CRS admin session token."""
+
+    try:
+        payload = _remote_client(
+            profile=profile,
+            base_url=base_url,
+            api_key=api_key,
+            username=username,
+            password=password,
+            admin_token=admin_token,
+            timeout=timeout,
+        ).login(save_token=True)
+    except (OSError, ValueError, remote_management.CrsApiError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} status={payload['status']} token_present={payload['token_present']} "
+            f"token_saved={payload.get('token_saved', False)}"
+        )
+
+
+@admin_token_group.command(name="clear")
+@_common_remote_options
+@click.option("--execute", is_flag=True, default=False, help="Actually delete the cached token file. Without it, print a dry-run plan.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def admin_token_clear_command(
+    profile: str,
+    base_url: str | None,
+    api_key: str | None,
+    username: str | None,
+    password: str | None,
+    admin_token: str | None,
+    timeout: float,
+    execute: bool,
+    json_output: bool,
+) -> None:
+    """Clear the cached CRS admin session token."""
+
+    try:
+        payload = _remote_client(
+            profile=profile,
+            base_url=base_url,
+            api_key=api_key,
+            username=username,
+            password=password,
+            admin_token=admin_token,
+            timeout=timeout,
+        ).token_store.clear(execute=execute)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(f"ok={payload['ok']} profile={payload['profile']} mutated={payload['mutated']} token_file={payload['token_file']}")
 
 
 @admin_group.group(name="accounts")
