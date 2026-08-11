@@ -68,7 +68,7 @@ def load_crs_profile(profile: str = DEFAULT_CRS_PROFILE, *, home: str | Path | N
         api_key=values.get("CRS_API_KEY") or os.environ.get("CRS_API_KEY", ""),
         username=values.get("CRS_USERNAME") or os.environ.get("CRS_USERNAME", ""),
         password=values.get("CRS_PASSWORD") or os.environ.get("CRS_PASSWORD", ""),
-        admin_token=values.get("CRS_ACCESS_TOKEN") or os.environ.get("CRS_ACCESS_TOKEN", ""),
+        admin_token="",
     )
 
 

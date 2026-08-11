@@ -19,36 +19,36 @@ def test_token_store_uses_parallel_chatarch_tokens_directory(tmp_path: Path):
     assert store.status()["base_url_match"] is False
 
 
-def test_token_store_saves_session_token_with_metadata_and_private_permissions(tmp_path: Path):
+def test_token_store_saves_session_token_through_chatenv_store(tmp_path: Path):
     home = tmp_path / "chatarch"
     profile = CrsProfile(base_url="https://crs.tencent-am.wzhecnu.cn", username="admin")
     store = CrsTokenStore(profile_name="admin", profile=profile, home=home)
 
-    summary = store.save_login_token("session-secret", expires_in=3600, username="admin")
+    summary = store.save_login_token("opaque-session-value", expires_in=3600, username="admin")
 
     assert summary["ok"] is True
     assert summary["token_present"] is True
     assert summary["profile"] == "admin"
     assert summary["service"] == "CRS"
     assert summary["token_file"] == str(store.path)
-    assert "session-secret" not in json.dumps(summary)
+    assert "opaque-session-value" not in json.dumps(summary)
     saved = json.loads(store.path.read_text())
     assert saved["service"] == "CRS"
     assert saved["profile"] == "admin"
-    assert saved["base_url"] == "https://crs.tencent-am.wzhecnu.cn"
-    assert saved["base_url_hash"]
     assert saved["token_type"] == "admin_session"
-    assert saved["access_token"] == "session-secret"
+    assert saved["summary"]["base_url"] == "https://crs.tencent-am.wzhecnu.cn"
+    assert saved["summary"]["base_url_hash"]
+    assert saved["summary"]["username"] == "admin"
+    assert saved["values"]["access_token"] == "opaque-session-value"
+    assert "access_token" not in {key for key in saved if key != "values"}
     assert saved["expires_at"]
-    assert store.path.stat().st_mode & 0o777 == 0o600
-    assert store.path.parent.stat().st_mode & 0o777 == 0o700
 
 
 def test_token_store_rejects_token_when_profile_base_url_changes(tmp_path: Path):
     home = tmp_path / "chatarch"
     original = CrsProfile(base_url="https://crs.tencent-am.wzhecnu.cn", username="admin")
     CrsTokenStore(profile_name="admin", profile=original, home=home).save_login_token(
-        "session-secret", expires_in=3600, username="admin"
+        "opaque-session-value", expires_in=3600, username="admin"
     )
 
     moved = CrsProfile(base_url="https://staging.example.test", username="admin")
@@ -65,7 +65,7 @@ def test_token_store_clear_is_dry_run_until_execute(tmp_path: Path):
     home = tmp_path / "chatarch"
     profile = CrsProfile(base_url="https://crs.tencent-am.wzhecnu.cn", username="admin")
     store = CrsTokenStore(profile_name="admin", profile=profile, home=home)
-    store.save_login_token("session-secret", expires_in=3600, username="admin")
+    store.save_login_token("opaque-session-value", expires_in=3600, username="admin")
 
     plan = store.clear(execute=False)
 

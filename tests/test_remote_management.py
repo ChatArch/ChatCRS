@@ -19,7 +19,6 @@ CRS_ENV_KEYS = (
     "CRS_API_KEY",
     "CRS_USERNAME",
     "CRS_PASSWORD",
-    "CRS_ACCESS_TOKEN",
 )
 
 
@@ -148,8 +147,8 @@ class FakeCrsHandler(BaseHTTPRequestHandler):
                             {
                                 "id": "key_1",
                                 "name": "primary",
-                                "token": "should-not-leak",
-                                "apiKey": "should-not-leak",
+                                "token": "opaque-admin-key-field",
+                                "apiKey": "opaque-admin-key-field",
                                 "isActive": True,
                                 "permissions": "all",
                                 "rateLimitWindow": 60,
@@ -194,7 +193,6 @@ def test_load_crs_admin_profile_reads_crs_admin_env_without_exposing_values(tmp_
         "CRS_API_KEY=cr_secret\n"
         "CRS_USERNAME=admin\n"
         "CRS_PASSWORD=secret\n"
-        "CRS_ACCESS_TOKEN=\n"
     )
 
     profile = load_crs_profile("admin", home=home)
@@ -290,7 +288,7 @@ def test_remote_admin_cli_reports_accounts_usage_and_key_stats_without_secrets()
         assert stats_body["timeRange"] == "custom"
         assert stats_body["startDate"] == key_payload["stats_start_date"]
         assert stats_body["endDate"] == key_payload["stats_end_date"]
-        assert "should-not-leak" not in key_result.output
+        assert "opaque-admin-key-field" not in key_result.output
     finally:
         server.shutdown()
         server.server_close()
@@ -341,7 +339,7 @@ def test_api_key_only_help_does_not_advertise_admin_credentials():
     assert "--admin-token" not in result.output
 
 
-def _write_crs_profile(home: Path, *, base_url: str, access_token: str = "") -> None:
+def _write_crs_profile(home: Path, *, base_url: str) -> None:
     env_dir = home / "envs" / "CRS"
     env_dir.mkdir(parents=True)
     (env_dir / "admin.env").write_text(
@@ -349,7 +347,6 @@ def _write_crs_profile(home: Path, *, base_url: str, access_token: str = "") -> 
         "CRS_API_KEY=cr_live_key\n"
         "CRS_USERNAME=admin\n"
         "CRS_PASSWORD=secret\n"
-        f"CRS_ACCESS_TOKEN={access_token}\n"
     )
 
 
@@ -371,8 +368,8 @@ def test_admin_login_can_save_session_token_to_parallel_token_store(tmp_path: Pa
         token_file = home / "tokens" / "CRS" / "admin.json"
         assert token_file.exists()
         saved = json.loads(token_file.read_text())
-        assert saved["access_token"] == FakeCrsHandler.admin_token
-        assert saved["base_url"] == base_url
+        assert saved["values"]["access_token"] == FakeCrsHandler.admin_token
+        assert saved["summary"]["base_url"] == base_url
     finally:
         server.shutdown()
         server.server_close()
@@ -419,7 +416,7 @@ def test_admin_requests_retry_once_and_refresh_token_store_after_stale_token(tmp
     _write_crs_profile(home, base_url=base_url)
     stale_profile = CrsProfile(base_url=base_url, username="admin", password="secret")
     CrsTokenStore(profile_name="admin", profile=stale_profile, home=home).save_login_token(
-        "old-session-token", expires_in=3600, username="admin"
+        "opaque-stale-session", expires_in=3600, username="admin"
     )
     runner = CliRunner(env={"CHATARCH_HOME": str(home)})
     try:
@@ -430,10 +427,10 @@ def test_admin_requests_retry_once_and_refresh_token_store_after_stale_token(tmp
         assert payload["ok"] is True
         assert payload["count"] == 1
         assert payload["accounts"][0]["id"] == "acct_1"
-        assert "old-session-token" not in result.output
+        assert "opaque-stale-session" not in result.output
         assert FakeCrsHandler.admin_token not in result.output
         saved = json.loads((home / "tokens" / "CRS" / "admin.json").read_text())
-        assert saved["access_token"] == FakeCrsHandler.admin_token
+        assert saved["values"]["access_token"] == FakeCrsHandler.admin_token
     finally:
         server.shutdown()
         server.server_close()

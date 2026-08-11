@@ -12,7 +12,6 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 | caller API key | CRS API key，用于普通 key 自查 | 是 |
 | admin username | CRS 管理员用户名 | 是 |
 | admin password | CRS 管理员密码 | 是 |
-| admin bearer/session token | CRS 管理员 bearer/session token | 是 |
 
 ## Runtime token store
 
@@ -23,7 +22,7 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 ~/.chatarch/tokens/CRS/<profile>.json  # 动态 Admin session token
 ```
 
-读取顺序是：显式 `--admin-token` > runtime token file > legacy `CRS_ACCESS_TOKEN` > 使用 username/password 登录。Admin API 返回 401 时，如果 profile 里有 username/password，ChatCRS 会重新登录、更新 token file，并重试一次。
+读取顺序是：显式 `--admin-token` > runtime token file > 使用 username/password 登录。Admin API 返回 401 时，如果 profile 里有 username/password，ChatCRS 会重新登录、更新 token file，并重试一次。
 
 `chatcrs admin token status` 只输出 token 文件路径、存在性、是否过期、base URL 是否匹配等元数据；不会打印 token。`chatcrs admin token clear` 默认 dry-run，必须加 `--execute` 才删除本地 token file。
 
@@ -37,6 +36,6 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 
 `chatcrs key info` 使用 CRS API key；`chatcrs admin ...` 使用管理员用户名/密码或管理员 token。前者 HTTP 200 只能证明 API key 自查链路可用，不能证明 admin profile 可用。
 
-如果 `chatcrs admin accounts usage` 返回 `CRS admin login failed status=401 reason=Invalid username or password`，说明当前 profile 的管理员凭据没有被生产 `/web/auth/login` 接受。此时应刷新 ChatEnv profile 中的管理员 identity/password 字段，或提供有效的 admin bearer/session token，而不是排查 account usage API 解析。
+如果 `chatcrs admin accounts usage` 返回 `CRS admin login failed status=401 reason=Invalid username or password`，说明当前 profile 的管理员凭据没有被生产 `/web/auth/login` 接受。此时应刷新 ChatEnv profile 中的管理员 identity/password 字段，或一次性提供有效的 `--admin-token`，而不是排查 account usage API 解析。
 
-敏感字段只应存在于 ChatEnv 或进程环境中，不进入命令行参数、文档、PR body 或日志输出。Profile 文件应使用 `0600` 权限。
+敏感字段只应存在于 ChatEnv、runtime token store 或进程环境中，不进入文档、PR body 或日志输出。
