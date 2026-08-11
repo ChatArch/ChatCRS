@@ -40,14 +40,34 @@ python -m mkdocs serve
 ## CLI 树
 
 ```text
-chatcrs
-├── health
-├── admin login
-├── admin accounts usage / refresh-status
-├── admin keys list / show
-├── key info
-└── service install / update / start / stop / restart / status / switch-branch / update-pricing
+chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
+├── --help  # Show this help message.
+├── --version  # Show the installed package version.
+├── --tree  # Print the registered command tree.
+├── health [--base-url <BASE-URL>] [--json-output]  # Verify the CRS /health endpoint.
+├── admin  # Remote CRS administrator operations via HTTPS Admin API.
+│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── usage [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
+│   │   └── refresh-status <ACCOUNT-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
+│   └── keys  # Inspect remote CRS API keys with admin privileges.
+│       ├── list [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats] [--time-range <TIME-RANGE>] [--json-output]  # List CRS API key metadata, optionally including usage stats.
+│       └── show <KEY-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats/--no-include-stats] [--time-range <TIME-RANGE>] [--json-output]  # Show one CRS API key by id or name.
+├── key  # CRS API-key-only operations that do not require admin login.
+│   └── info [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--timeout <TIMEOUT>] [--path <INFO-PATH>] [--json-output]  # Query CRS key-info using only a CRS API key.
+└── service  # Local CRS service lifecycle commands for the current server.
+    ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
+    ├── update [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update` on this server.
+    ├── start [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs start` on this server.
+    ├── stop [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs stop` on this server.
+    ├── restart [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs restart` on this server.
+    ├── status [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--json-output]  # Execute local `crs status` on this server.
+    ├── switch-branch <BRANCH> [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs switch-branch <branch>` on this server.
+    └── update-pricing [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update-pricing` on this server.
 ```
+
+运行 `chatcrs --tree` 可从实际 Click 注册表回读同一棵命令树。
+
 
 ## HTTP/Admin 与 API key
 
@@ -77,16 +97,16 @@ chatcrs service restart --app-dir /path/to/crs --execute --json-output
 
 ## 配置
 
-ChatCRS 使用一套 CRS ChatEnv profile，默认读取 `~/.chatarch/envs/CRS/admin.env`，也可以用 `--profile` 指定其它 profile。
+ChatCRS 使用一套 CRS ChatEnv profile；默认 profile 是 `admin`，也可以用 `--profile` 指定其它 profile。公开文档只描述字段类别，不写具体 secret 文件路径或 secret-bearing env key 名。
 
-Canonical 字段：
+Canonical 字段类别：
 
 ```text
-CRS_API_BASE
-CRS_API_KEY
-CRS_USERNAME
-CRS_PASSWORD
-CRS_ACCESS_TOKEN
+HTTP base URL
+caller API key
+admin username
+admin password
+admin bearer/session token
 ```
 
 Service-local 目标不进入第二套 ChatEnv namespace；用当前工作目录或 `--app-dir` / `--crs-command` 指定本机 checkout 和 executable。

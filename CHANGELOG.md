@@ -2,9 +2,18 @@
 
 ## Unreleased
 
+## 2026-08-10 - 0.2.3
+
+### Added
+
+- Add runtime-generated `chatcrs --tree` support backed by the registered Click command tree.
+- Cover `--help`, `--tree`, representative command groups, and template `hello` absence in CLI tests.
+
 ### Changed
 
 - Rework the MkDocs navigation into top-level documentation sections and make the homepage a card-based hub for management, configuration, operations, and development entry points.
+- Sync README and bilingual CLI docs with the runtime `chatcrs --tree` output.
+- Tighten ChatArch internal dependency windows for the 0.2.3 patch release.
 
 ## 2026-08-06 - 0.2.2
 
@@ -13,9 +22,8 @@
 - Replace the host-bound remote service lifecycle wrapper with local-only
   `chatcrs service ...` commands that run on the CRS server itself and never use
   remote execution transport.
-- Keep one canonical CRS ChatEnv namespace under `~/.chatarch/envs/CRS/` with
-  `CRS_API_BASE`, `CRS_API_KEY`, `CRS_USERNAME`, `CRS_PASSWORD`, and
-  `CRS_ACCESS_TOKEN`.
+- Keep one canonical CRS ChatEnv namespace for the HTTP base URL, caller API key,
+  admin identity, admin password, and admin bearer/session token categories.
 - Document `service` as a server-local lifecycle/install/update/status surface,
   while keeping verify/image/debug/Nginx/cutover task surfaces removed.
 - Add a CLI-to-HTTP/local interface map that ties every registered CLI leaf to its

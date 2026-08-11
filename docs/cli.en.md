@@ -1,31 +1,34 @@
 # CLI Tree
 
-This page lists **commands currently implemented and registered in `chatcrs.cli`**. Tests read the Click registry and keep this page aligned with command changes.
+This page lists **commands currently implemented and registered in `chatcrs.cli`**. Run `chatcrs --tree` to read back the same tree from the live Click registry; command changes must keep this page aligned.
 
 ## Top-level commands
 
 ```text
-chatcrs                                           # CRS HTTP/API-first + server-local management CLI
-├── health                                        # Check the selected CRS /health endpoint
-├── admin                                         # Remote CRS Admin HTTP API operations
-│   ├── login                                     # Verify admin login without printing the session token
-│   ├── accounts                                  # Inspect or refresh OpenAI/Codex account state
-│   │   ├── usage                                 # Account usage, scheduling, and availability summary
-│   │   └── refresh-status                        # Dry-run by default; --execute calls reset-status
-│   └── keys                                      # Inspect CRS API key metadata and statistics
-│       ├── list                                  # List keys; optionally include batch stats/last-usage
-│       └── show                                  # Safe summary for one key by id/name
-├── key                                           # API-key-only self-inspection commands
-│   └── info                                      # Current API key information, availability, and usage
-└── service                                       # Service commands that run only on the CRS server itself
-    ├── install                                   # Dry-run by default; --execute runs local crs install
-    ├── update                                    # Dry-run by default; --execute runs local crs update
-    ├── start                                     # Dry-run by default; --execute runs local crs start
-    ├── stop                                      # Dry-run by default; --execute runs local crs stop
-    ├── restart                                   # Dry-run by default; --execute runs local crs restart
-    ├── status                                    # Runs local crs status; read-only
-    ├── switch-branch                             # Dry-run by default; --execute runs local crs switch-branch
-    └── update-pricing                            # Dry-run by default; --execute runs local crs update-pricing
+chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
+├── --help  # Show this help message.
+├── --version  # Show the installed package version.
+├── --tree  # Print the registered command tree.
+├── health [--base-url <BASE-URL>] [--json-output]  # Verify the CRS /health endpoint.
+├── admin  # Remote CRS administrator operations via HTTPS Admin API.
+│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── usage [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
+│   │   └── refresh-status <ACCOUNT-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
+│   └── keys  # Inspect remote CRS API keys with admin privileges.
+│       ├── list [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats] [--time-range <TIME-RANGE>] [--json-output]  # List CRS API key metadata, optionally including usage stats.
+│       └── show <KEY-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats/--no-include-stats] [--time-range <TIME-RANGE>] [--json-output]  # Show one CRS API key by id or name.
+├── key  # CRS API-key-only operations that do not require admin login.
+│   └── info [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--timeout <TIMEOUT>] [--path <INFO-PATH>] [--json-output]  # Query CRS key-info using only a CRS API key.
+└── service  # Local CRS service lifecycle commands for the current server.
+    ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
+    ├── update [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update` on this server.
+    ├── start [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs start` on this server.
+    ├── stop [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs stop` on this server.
+    ├── restart [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs restart` on this server.
+    ├── status [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--json-output]  # Execute local `crs status` on this server.
+    ├── switch-branch <BRANCH> [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs switch-branch <branch>` on this server.
+    └── update-pricing [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update-pricing` on this server.
 ```
 
 ## Coverage matrix

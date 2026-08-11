@@ -32,13 +32,13 @@ chatcrs
 
 | CLI | Interface | Authentication source | Mutation | Python API |
 |---|---|---|---|---|
-| `chatcrs health` | `GET /health` | None; only `CRS_API_BASE` or `--base-url` | No | `chatcrs.local.health_check` |
-| `chatcrs admin login` | `POST /web/auth/login` | `CRS_USERNAME` + `CRS_PASSWORD`, or explicit options | No durable mutation; verifies login and reports token presence | `CrsHttpClient.login` |
+| `chatcrs health` | `GET /health` | None; configured base URL field or `--base-url` | No | health-check helper |
+| `chatcrs admin login` | `POST /web/auth/login` | configured admin identity/password fields, or explicit options | No durable mutation; verifies login and reports token presence | `CrsHttpClient.login` |
 | `chatcrs admin accounts usage` | `GET /admin/openai-accounts` | Admin bearer token, resolved from profile/login | No | `CrsHttpClient.accounts_usage` |
 | `chatcrs admin accounts refresh-status` | `POST /admin/openai-accounts/{account_id}/reset-status` | Admin bearer token | No by default; calls endpoint only with `--execute` | `CrsHttpClient.reset_openai_account_status` |
 | `chatcrs admin keys list` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_keys` |
 | `chatcrs admin keys show` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_key_detail` |
-| `chatcrs key info` | `GET /openai/key-info` | Caller CRS API key: `CRS_API_KEY` or `--api-key` | No | `CrsHttpClient.key_info` |
+| `chatcrs key info` | `GET /openai/key-info` | caller CRS API key from profile or `--api-key` | No | `CrsHttpClient.key_info` |
 | `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service start` | local `crs start` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
@@ -52,15 +52,15 @@ chatcrs
 
 | Field / option | Purpose | Used by |
 |---|---|---|
-| `CRS_API_BASE` | CRS HTTP base URL | HTTP/Admin/API-key commands |
-| `CRS_API_KEY` | Caller API key | `chatcrs key info` |
-| `CRS_USERNAME` | Admin username | `chatcrs admin login` and admin commands that need a login-derived token |
-| `CRS_PASSWORD` | Admin password | `chatcrs admin login` and admin commands that need a login-derived token |
-| `CRS_ACCESS_TOKEN` | Admin bearer token | `chatcrs admin ...` |
+| HTTP base URL profile field | CRS HTTP base URL | HTTP/Admin/API-key commands |
+| caller API-key profile field | Caller API key | `chatcrs key info` |
+| admin identity profile field | Admin username | `chatcrs admin login` and admin commands that need a login-derived token |
+| admin password profile field | Admin password | `chatcrs admin login` and admin commands that need a login-derived token |
+| admin bearer/session token profile field | Admin bearer token | `chatcrs admin ...` |
 | `--app-dir` | Local CRS app directory on the current server | `chatcrs service ...` |
 | `--crs-command` | Local CRS executable or command name | `chatcrs service ...` |
 
-The canonical ChatEnv namespace is `CRS`: `~/.chatarch/envs/CRS/<profile>.env`. Service-local options are CLI/Python parameters, not a second ChatEnv target namespace.
+The canonical ChatEnv namespace is `CRS`; public docs intentionally omit concrete secret-file paths. Service-local options are CLI/Python parameters, not a second ChatEnv target namespace.
 
 ## Service-local contract
 
