@@ -412,7 +412,7 @@ def admin_keys_group() -> None:
 @admin_keys_group.command(name="list")
 @_common_remote_options
 @click.option("--include-stats", is_flag=True, default=False, help="Fetch batch usage and last-account attribution for each key.")
-@click.option("--time-range", default="all", show_default=True, type=click.Choice(["today", "7days", "30days", "all"]))
+@click.option("--time-range", default="all", show_default=True, type=click.Choice(["today", "7days", "monthly", "30days", "all"]))
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def admin_keys_list_command(
     profile: str,
@@ -450,7 +450,7 @@ def admin_keys_list_command(
 @_common_remote_options
 @click.argument("key_id")
 @click.option("--include-stats/--no-include-stats", default=True, show_default=True)
-@click.option("--time-range", default="all", show_default=True, type=click.Choice(["today", "7days", "30days", "all"]))
+@click.option("--time-range", default="all", show_default=True, type=click.Choice(["today", "7days", "monthly", "30days", "all"]))
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def admin_keys_show_command(
     profile: str,

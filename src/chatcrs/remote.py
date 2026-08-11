@@ -7,6 +7,7 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,19 @@ from chatcrs.redaction import redact
 from chatcrs.tokens import CrsTokenStore
 
 DEFAULT_CRS_PROFILE = "admin"
+
+def build_stats_time_range_payload(time_range: str, *, today: date | None = None) -> dict[str, str]:
+    """Return the CRS Admin API stats-range payload for a ChatCRS CLI range."""
+
+    if time_range != "30days":
+        return {"timeRange": time_range}
+    end_date = today or date.today()
+    start_date = end_date - timedelta(days=29)
+    return {
+        "timeRange": "custom",
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+    }
 
 
 @dataclass(frozen=True)
@@ -244,6 +258,7 @@ class CrsHttpClient:
         }
 
     def api_keys(self, *, include_stats: bool = False, time_range: str = "all") -> dict[str, Any]:
+        stats_range_payload = build_stats_time_range_payload(time_range)
         status, parsed = self.admin_request("GET", "/admin/api-keys")
         ok = status == 200 and isinstance(parsed, dict) and parsed.get("success") is not False
         data = parsed.get("data", []) if isinstance(parsed, dict) else []
@@ -263,7 +278,7 @@ class CrsHttpClient:
             stats_status, stats_payload = self.admin_request(
                 "POST",
                 "/admin/api-keys/batch-stats",
-                payload={"keyIds": key_ids, "timeRange": time_range},
+                payload={"keyIds": key_ids, **stats_range_payload},
             )
             if stats_status == 200 and isinstance(stats_payload, dict):
                 stats = stats_payload.get("data", {}) or {}
@@ -292,6 +307,10 @@ class CrsHttpClient:
             "status": status,
             "count": len(enriched),
             "pagination": pagination,
+            "time_range": time_range,
+            "stats_time_range": stats_range_payload.get("timeRange") if include_stats else None,
+            "stats_start_date": stats_range_payload.get("startDate") if include_stats else None,
+            "stats_end_date": stats_range_payload.get("endDate") if include_stats else None,
             "keys": enriched,
         }
 
