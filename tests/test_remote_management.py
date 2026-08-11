@@ -11,6 +11,7 @@ from click.testing import CliRunner
 
 from chatcrs.cli import main
 from chatcrs.remote import CrsApiError, CrsHttpClient, CrsProfile, load_crs_profile
+from chatcrs.tokens import CrsTokenStore
 
 CRS_ENV_KEYS = (
     "CRS_API_BASE",
@@ -319,3 +320,101 @@ def test_api_key_only_help_does_not_advertise_admin_credentials():
     assert "--username" not in result.output
     assert "--password" not in result.output
     assert "--admin-token" not in result.output
+
+
+def _write_crs_profile(home: Path, *, base_url: str, access_token: str = "") -> None:
+    env_dir = home / "envs" / "CRS"
+    env_dir.mkdir(parents=True)
+    (env_dir / "admin.env").write_text(
+        f"CRS_API_BASE={base_url}\n"
+        "CRS_API_KEY=cr_live_key\n"
+        "CRS_USERNAME=admin\n"
+        "CRS_PASSWORD=secret\n"
+        f"CRS_ACCESS_TOKEN={access_token}\n"
+    )
+
+
+def test_admin_login_can_save_session_token_to_parallel_token_store(tmp_path: Path):
+    server, base_url = run_fake_crs()
+    home = tmp_path / "chatarch-home"
+    _write_crs_profile(home, base_url=base_url)
+    runner = CliRunner(env={"CHATARCH_HOME": str(home)})
+    try:
+        result = runner.invoke(main, ["admin", "login", "--profile", "admin", "--save-token", "--json-output"])
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["ok"] is True
+        assert payload["token_saved"] is True
+        assert payload["base_url"] == base_url
+        assert payload["token_file"].endswith("tokens/CRS/admin.json")
+        assert FakeCrsHandler.admin_token not in result.output
+        token_file = home / "tokens" / "CRS" / "admin.json"
+        assert token_file.exists()
+        saved = json.loads(token_file.read_text())
+        assert saved["access_token"] == FakeCrsHandler.admin_token
+        assert saved["base_url"] == base_url
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_admin_token_refresh_status_and_clear_commands_manage_runtime_token_file(tmp_path: Path):
+    server, base_url = run_fake_crs()
+    home = tmp_path / "chatarch-home"
+    _write_crs_profile(home, base_url=base_url)
+    runner = CliRunner(env={"CHATARCH_HOME": str(home)})
+    try:
+        refresh = runner.invoke(main, ["admin", "token", "refresh", "--profile", "admin", "--json-output"])
+        assert refresh.exit_code == 0, refresh.output
+        refresh_payload = json.loads(refresh.output)
+        assert refresh_payload["ok"] is True
+        assert refresh_payload["token_saved"] is True
+        assert FakeCrsHandler.admin_token not in refresh.output
+
+        status = runner.invoke(main, ["admin", "token", "status", "--profile", "admin", "--json-output"])
+        assert status.exit_code == 0, status.output
+        status_payload = json.loads(status.output)
+        assert status_payload["token_file_exists"] is True
+        assert status_payload["token_present"] is True
+        assert status_payload["base_url_match"] is True
+        assert FakeCrsHandler.admin_token not in status.output
+
+        dry_run = runner.invoke(main, ["admin", "token", "clear", "--profile", "admin", "--json-output"])
+        assert dry_run.exit_code == 0, dry_run.output
+        assert json.loads(dry_run.output)["mutated"] is False
+        assert (home / "tokens" / "CRS" / "admin.json").exists()
+
+        cleared = runner.invoke(main, ["admin", "token", "clear", "--profile", "admin", "--execute", "--json-output"])
+        assert cleared.exit_code == 0, cleared.output
+        assert json.loads(cleared.output)["mutated"] is True
+        assert not (home / "tokens" / "CRS" / "admin.json").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_admin_requests_retry_once_and_refresh_token_store_after_stale_token(tmp_path: Path):
+    server, base_url = run_fake_crs()
+    home = tmp_path / "chatarch-home"
+    _write_crs_profile(home, base_url=base_url)
+    stale_profile = CrsProfile(base_url=base_url, username="admin", password="secret")
+    CrsTokenStore(profile_name="admin", profile=stale_profile, home=home).save_login_token(
+        "old-session-token", expires_in=3600, username="admin"
+    )
+    runner = CliRunner(env={"CHATARCH_HOME": str(home)})
+    try:
+        result = runner.invoke(main, ["admin", "accounts", "usage", "--profile", "admin", "--json-output"])
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["ok"] is True
+        assert payload["count"] == 1
+        assert payload["accounts"][0]["id"] == "acct_1"
+        assert "old-session-token" not in result.output
+        assert FakeCrsHandler.admin_token not in result.output
+        saved = json.loads((home / "tokens" / "CRS" / "admin.json").read_text())
+        assert saved["access_token"] == FakeCrsHandler.admin_token
+    finally:
+        server.shutdown()
+        server.server_close()

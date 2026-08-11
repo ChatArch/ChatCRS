@@ -14,6 +14,7 @@ from chatenv import EnvStore, get_paths
 
 from chatcrs.config import ChatcrsConfig
 from chatcrs.redaction import redact
+from chatcrs.tokens import CrsTokenStore
 
 DEFAULT_CRS_PROFILE = "admin"
 
@@ -108,12 +109,25 @@ def _safe_error_reason(body: Any) -> str:
 class CrsHttpClient:
     """Small stdlib-only CRS HTTP client for admin and API-key endpoints."""
 
-    def __init__(self, profile: CrsProfile, *, timeout: float = 20.0):
+    def __init__(
+        self,
+        profile: CrsProfile,
+        *,
+        timeout: float = 20.0,
+        profile_name: str = DEFAULT_CRS_PROFILE,
+        home: str | Path | None = None,
+        explicit_admin_token: bool = False,
+    ):
         if not profile.base_url:
             raise ValueError("CRS base URL is required; set CRS_API_BASE or pass --base-url")
         self.profile = profile
+        self.profile_name = profile_name
         self.timeout = timeout
-        self._admin_token = profile.admin_token
+        self.token_store = CrsTokenStore(profile_name=profile_name, profile=profile, home=home)
+        if explicit_admin_token:
+            self._admin_token = profile.admin_token
+        else:
+            self._admin_token = self.token_store.load_token() or profile.admin_token
 
     def _request_json(
         self,
@@ -149,7 +163,7 @@ class CrsHttpClient:
             parsed = {"raw": response_body.decode("utf-8", errors="replace")}
         return status, parsed
 
-    def login(self) -> dict[str, Any]:
+    def login(self, *, save_token: bool = False) -> dict[str, Any]:
         if not self.profile.username or not self.profile.password:
             raise ValueError("CRS admin username/password are required for login")
         status, parsed = self._request_json(
@@ -160,18 +174,39 @@ class CrsHttpClient:
         if status != 200 or not isinstance(parsed, dict) or not parsed.get("token"):
             raise CrsApiError("CRS admin login failed", status=status, body=redact(parsed))
         self._admin_token = str(parsed["token"])
-        return {
+        payload: dict[str, Any] = {
             "ok": True,
             "status": status,
+            "profile": self.profile_name,
+            "base_url": self.profile.base_url.rstrip("/"),
             "username": parsed.get("username"),
             "expiresIn": parsed.get("expiresIn"),
             "token_present": True,
+            "token_saved": False,
         }
+        if save_token:
+            token_summary = self.token_store.save_login_token(
+                self._admin_token,
+                expires_in=parsed.get("expiresIn"),
+                username=str(parsed.get("username") or self.profile.username or ""),
+            )
+            payload.update(
+                {
+                    "token_saved": True,
+                    "token_file": token_summary["token_file"],
+                    "expires_at": token_summary["expires_at"],
+                    "base_url_hash": token_summary["base_url_hash"],
+                }
+            )
+        return payload
 
     def _admin_headers(self) -> dict[str, str]:
         if not self._admin_token:
-            self.login()
+            self.login(save_token=True)
         return {"authorization": f"Bearer {self._admin_token}"}
+
+    def _can_refresh_admin_token(self) -> bool:
+        return bool(self.profile.username and self.profile.password)
 
     def admin_request(
         self,
@@ -180,7 +215,11 @@ class CrsHttpClient:
         *,
         payload: dict[str, Any] | None = None,
     ) -> tuple[int, Any]:
-        return self._request_json(method, path, payload=payload, headers=self._admin_headers())
+        status, parsed = self._request_json(method, path, payload=payload, headers=self._admin_headers())
+        if status == 401 and self._can_refresh_admin_token():
+            self.login(save_token=True)
+            status, parsed = self._request_json(method, path, payload=payload, headers=self._admin_headers())
+        return status, parsed
 
     def accounts_usage(self) -> dict[str, Any]:
         status, parsed = self.admin_request("GET", "/admin/openai-accounts")
@@ -289,6 +328,7 @@ def client_from_options(
     password: str | None = None,
     admin_token: str | None = None,
     timeout: float = 20.0,
+    home: str | Path | None = None,
 ) -> CrsHttpClient:
     return CrsHttpClient(
         resolve_profile(
@@ -300,4 +340,7 @@ def client_from_options(
             admin_token=admin_token,
         ),
         timeout=timeout,
+        profile_name=profile,
+        home=home,
+        explicit_admin_token=admin_token is not None,
     )
