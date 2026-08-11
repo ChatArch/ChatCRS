@@ -1,28 +1,19 @@
-"""Runtime token store for ChatCRS.
-
-Dynamic CRS Admin session tokens are runtime state, not stable ChatEnv
-configuration.  They are stored under ``~/.chatarch/tokens/CRS/<profile>.json``
-parallel to ``~/.chatarch/envs/CRS/<profile>.env``.
-"""
+"""CRS-specific adapter around ChatEnv's generic runtime token store."""
 
 from __future__ import annotations
 
 import hashlib
-import json
-import os
-import re
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from chatenv import get_paths
+from chatenv import TokenStore
 
 if TYPE_CHECKING:
     from chatcrs.remote import CrsProfile
 
 SERVICE_NAME = "CRS"
-TOKEN_SCHEMA_VERSION = 1
+TOKEN_TYPE = "admin_session"
 
 
 def _now() -> datetime:
@@ -46,26 +37,19 @@ def _parse_iso(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _safe_profile_name(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", value.strip())
-    cleaned = cleaned.strip(".-")
-    return cleaned or "default"
-
-
 def base_url_hash(base_url: str) -> str:
     normalized = base_url.rstrip("/")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 class CrsTokenStore:
-    """JSON file store for one CRS profile's Admin session token."""
+    """CRS Admin-session view over ChatEnv's generic service/profile store."""
 
     def __init__(self, *, profile_name: str, profile: CrsProfile, home: str | Path | None = None):
         self.profile_name = profile_name
         self.profile = profile
-        self.home = Path(get_paths(home).home_dir)
-        safe_name = _safe_profile_name(profile_name)
-        self.path = self.home / "tokens" / SERVICE_NAME / f"{safe_name}.json"
+        self._store = TokenStore(home=home)
+        self.path = self._store.token_path(SERVICE_NAME, profile_name)
 
     @property
     def _normalized_base_url(self) -> str:
@@ -76,16 +60,19 @@ class CrsTokenStore:
         return base_url_hash(self._normalized_base_url)
 
     def _read(self) -> dict[str, Any]:
-        try:
-            payload = json.loads(self.path.read_text())
-        except FileNotFoundError:
-            return {}
-        except (OSError, json.JSONDecodeError):
-            return {}
-        return payload if isinstance(payload, dict) else {}
+        return self._store.read(SERVICE_NAME, self.profile_name)
+
+    def _summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        summary = payload.get("summary")
+        return summary if isinstance(summary, dict) else {}
+
+    def _values(self, payload: dict[str, Any]) -> dict[str, Any]:
+        values = payload.get("values")
+        return values if isinstance(values, dict) else {}
 
     def _base_url_matches(self, payload: dict[str, Any]) -> bool:
-        return payload.get("base_url") == self._normalized_base_url and payload.get("base_url_hash") == self._base_url_hash
+        summary = self._summary(payload)
+        return summary.get("base_url") == self._normalized_base_url and summary.get("base_url_hash") == self._base_url_hash
 
     def _is_expired(self, payload: dict[str, Any]) -> bool:
         expires_at = _parse_iso(payload.get("expires_at"))
@@ -97,8 +84,10 @@ class CrsTokenStore:
         """Return a usable cached token or an empty string."""
 
         payload = self._read()
-        token = payload.get("access_token")
+        token = self._values(payload).get("access_token")
         if not isinstance(token, str) or not token:
+            return ""
+        if payload.get("token_type") != TOKEN_TYPE:
             return ""
         if not self._base_url_matches(payload):
             return ""
@@ -111,61 +100,44 @@ class CrsTokenStore:
 
         if not token:
             raise ValueError("token is required")
-        now = _now()
-        expires_at = None
+        expires_at = ""
         if expires_in is not None:
             try:
                 seconds = int(float(expires_in))
             except (TypeError, ValueError):
                 seconds = 0
             if seconds > 0:
-                expires_at = now + timedelta(seconds=seconds)
-        payload = {
-            "schema_version": TOKEN_SCHEMA_VERSION,
-            "service": SERVICE_NAME,
-            "profile": self.profile_name,
-            "base_url": self._normalized_base_url,
-            "base_url_hash": self._base_url_hash,
-            "token_type": "admin_session",
-            "access_token": token,
-            "username": username or self.profile.username or "",
-            "created_at": _iso(now),
-            "updated_at": _iso(now),
-            "expires_at": _iso(expires_at) if expires_at else "",
-            "source": "login",
-        }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(self.path.parent, 0o700)
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=str(self.path.parent), text=True)
-        try:
-            with os.fdopen(fd, "w") as handle:
-                json.dump(payload, handle, ensure_ascii=False, indent=2)
-                handle.write("\n")
-            os.chmod(tmp_name, 0o600)
-            os.replace(tmp_name, self.path)
-        finally:
-            if os.path.exists(tmp_name):
-                os.unlink(tmp_name)
-        os.chmod(self.path, 0o600)
-        return {
-            "ok": True,
-            "service": SERVICE_NAME,
-            "profile": self.profile_name,
-            "base_url": self._normalized_base_url,
-            "base_url_hash": self._base_url_hash,
-            "token_type": "admin_session",
-            "token_present": True,
-            "token_saved": True,
-            "token_file": str(self.path),
-            "expires_at": payload["expires_at"],
-            "updated_at": payload["updated_at"],
-        }
+                expires_at = _iso(_now() + timedelta(seconds=seconds))
+        status = self._store.write(
+            SERVICE_NAME,
+            self.profile_name,
+            values={"access_token": token},
+            token_type=TOKEN_TYPE,
+            summary={
+                "base_url": self._normalized_base_url,
+                "base_url_hash": self._base_url_hash,
+                "username": username or self.profile.username or "",
+            },
+            expires_at=expires_at,
+            source="login",
+        )
+        summary = status.get("summary") if isinstance(status.get("summary"), dict) else {}
+        status.update(
+            {
+                "base_url": summary.get("base_url", self._normalized_base_url),
+                "base_url_hash": summary.get("base_url_hash", self._base_url_hash),
+                "token_saved": True,
+            }
+        )
+        return status
 
     def status(self) -> dict[str, Any]:
         payload = self._read()
-        token_present = isinstance(payload.get("access_token"), str) and bool(payload.get("access_token"))
+        generic = self._store.status(SERVICE_NAME, self.profile_name)
+        token_present = generic["token_present"]
         base_url_match = bool(payload) and self._base_url_matches(payload)
         expired = bool(payload) and self._is_expired(payload)
+        summary = self._summary(payload)
         return {
             "ok": True,
             "service": SERVICE_NAME,
@@ -175,33 +147,17 @@ class CrsTokenStore:
             "token_file": str(self.path),
             "token_file_exists": self.path.exists(),
             "token_present": token_present,
+            "token_type": payload.get("token_type") if payload else TOKEN_TYPE,
             "base_url_match": base_url_match,
             "expired": expired,
-            "expires_at": payload.get("expires_at", "") if isinstance(payload, dict) else "",
-            "updated_at": payload.get("updated_at", "") if isinstance(payload, dict) else "",
+            "expires_at": generic.get("expires_at", ""),
+            "updated_at": generic.get("updated_at", ""),
+            "source": generic.get("source", ""),
+            "summary": summary,
         }
 
     def clear(self, *, execute: bool = False) -> dict[str, Any]:
-        exists = self.path.exists()
-        if not execute:
-            return {
-                "ok": True,
-                "mutated": False,
-                "profile": self.profile_name,
-                "token_file": str(self.path),
-                "token_file_exists": exists,
-                "would_delete": str(self.path),
-            }
-        if exists:
-            self.path.unlink()
-        return {
-            "ok": True,
-            "mutated": exists,
-            "profile": self.profile_name,
-            "token_file": str(self.path),
-            "token_file_exists": False,
-            "deleted": exists,
-        }
+        return self._store.clear(SERVICE_NAME, self.profile_name, execute=execute)
 
 
 __all__ = ["CrsTokenStore", "base_url_hash"]

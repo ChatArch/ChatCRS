@@ -40,11 +40,4 @@ class ChatcrsConfig(BaseEnvConfig):
         is_sensitive=True,
     )
 
-    CRS_ACCESS_TOKEN = EnvField(
-        "CRS_ACCESS_TOKEN",
-        desc="CRS administrator bearer/session token",
-        is_sensitive=True,
-    )
-
-
 __all__ = ["ChatcrsConfig"]

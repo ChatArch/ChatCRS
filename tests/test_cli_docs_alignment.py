@@ -173,8 +173,8 @@ def test_chatenv_provider_is_single_crs_http_namespace_without_ssh_fields():
         "CRS_API_KEY",
         "CRS_USERNAME",
         "CRS_PASSWORD",
-        "CRS_ACCESS_TOKEN",
     }.issubset(env_keys)
+    assert "CRS_ACCESS_TOKEN" not in env_keys
     assert not {
         "CHATCRS_SSH_ALIAS",
         "CHATCRS_APP_DIR",

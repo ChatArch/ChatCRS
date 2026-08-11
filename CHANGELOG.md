@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-08-11 - 0.2.5
+
+### Changed
+
+- Refactor ChatCRS Admin session caching to use ChatEnv 0.2.5's generic `TokenStore` substrate while keeping CRS-specific base URL matching and redacted status output.
+- Remove `CRS_ACCESS_TOKEN` from the stable CRS ChatEnv profile schema; dynamic Admin session state now lives only in the parallel token profile.
+
 ### Fixed
 
 - Translate legacy `chatcrs admin keys --time-range 30days` requests into a CRS Admin API `custom` 30-day date window so key usage stats no longer silently fall through to empty results.
