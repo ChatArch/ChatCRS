@@ -56,6 +56,10 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package version ${RELEASE_TAG}."
             exit 1
           fi
+      - name: Check release commit is on default branch
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"
       - name: Check PyPI version
         id: pypi
         env:
@@ -92,6 +96,6 @@ jobs:
           python -m pip install --upgrade pip build twine
           python -m build
           python -m twine check dist/*
-      - name: Publish to PyPI
+      - name: Publish to PyPI (OIDC)
         if: steps.pypi.outputs.exists == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1

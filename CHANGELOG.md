@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.7
+
+### Changed
+
+- Add the MkDocs Material emoji renderer baseline so Material icon shorthand cannot leak into generated/live docs.
+- Harden package publishing with a default-branch ancestry guard before OIDC PyPI publish.
+- Expand CI to Python 3.10/3.11/3.12 and smoke the installed `chatcrs --version` / `chatcrs --tree` entry point.
+- Sync the README CLI tree with the live runtime tree, including the Admin token-store commands.
+
 ## 2026-08-11 - 0.2.6
 
 ### Changed
