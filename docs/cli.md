@@ -1,31 +1,34 @@
 # CLI 命令树
 
-此页只列出 **当前已经在 `chatcrs.cli` 中注册的命令**。命令树由测试从 Click 注册表回读；新增或删除命令必须同步本页。
+此页只列出 **当前已经在 `chatcrs.cli` 中注册的命令**。运行 `chatcrs --tree` 可从 Click 注册表回读同一棵树；新增或删除命令必须同步本页。
 
 ## 顶层命令
 
 ```text
-chatcrs                                           # CRS HTTP/API-first + server-local management CLI
-├── health                                        # 检查选定 CRS /health endpoint
-├── admin                                         # 远程 CRS Admin HTTP API 操作
-│   ├── login                                     # 验证管理员登录，不打印 session token
-│   ├── accounts                                  # 查询或刷新 OpenAI/Codex 账号状态
-│   │   ├── usage                                 # usage、调度、可用性摘要
-│   │   └── refresh-status                        # 默认 dry-run；--execute 才调用 reset-status
-│   └── keys                                      # 查询 CRS API key 元数据与统计
-│       ├── list                                  # 列表；可选 batch stats / last-usage
-│       └── show                                  # 按 id/name 返回单个 key 的安全摘要
-├── key                                           # 普通 CRS API key 自查
-│   └── info                                      # 当前 key 的信息、可用性和 usage
-└── service                                       # 只在 CRS 服务器本机运行的 service 命令
-    ├── install                                   # 默认 dry-run；--execute 才运行本机 crs install
-    ├── update                                    # 默认 dry-run；--execute 才运行本机 crs update
-    ├── start                                     # 默认 dry-run；--execute 才运行本机 crs start
-    ├── stop                                      # 默认 dry-run；--execute 才运行本机 crs stop
-    ├── restart                                   # 默认 dry-run；--execute 才运行本机 crs restart
-    ├── status                                    # 直接运行本机 crs status，只读
-    ├── switch-branch                             # 默认 dry-run；--execute 才运行本机 crs switch-branch
-    └── update-pricing                            # 默认 dry-run；--execute 才运行本机 crs update-pricing
+chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
+├── --help  # Show this help message.
+├── --version  # Show the installed package version.
+├── --tree  # Print the registered command tree.
+├── health [--base-url <BASE-URL>] [--json-output]  # Verify the CRS /health endpoint.
+├── admin  # Remote CRS administrator operations via HTTPS Admin API.
+│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── usage [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
+│   │   └── refresh-status <ACCOUNT-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
+│   └── keys  # Inspect remote CRS API keys with admin privileges.
+│       ├── list [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats] [--time-range <TIME-RANGE>] [--json-output]  # List CRS API key metadata, optionally including usage stats.
+│       └── show <KEY-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats/--no-include-stats] [--time-range <TIME-RANGE>] [--json-output]  # Show one CRS API key by id or name.
+├── key  # CRS API-key-only operations that do not require admin login.
+│   └── info [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--timeout <TIMEOUT>] [--path <INFO-PATH>] [--json-output]  # Query CRS key-info using only a CRS API key.
+└── service  # Local CRS service lifecycle commands for the current server.
+    ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
+    ├── update [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update` on this server.
+    ├── start [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs start` on this server.
+    ├── stop [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs stop` on this server.
+    ├── restart [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs restart` on this server.
+    ├── status [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--json-output]  # Execute local `crs status` on this server.
+    ├── switch-branch <BRANCH> [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs switch-branch <branch>` on this server.
+    └── update-pricing [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update-pricing` on this server.
 ```
 
 ## 覆盖矩阵
