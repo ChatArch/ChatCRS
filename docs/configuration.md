@@ -15,7 +15,7 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 
 ## Runtime token store
 
-短期 CRS Admin session token 不再作为主要配置写入 Env。ChatCRS 会使用与 Env profile 平行的 token store：
+短期 CRS Admin session token 不再作为主要配置写入 Env。ChatCRS 会使用与 Env profile 平行的 token store；安装 ChatCRS 后也会注册 ChatEnv refresh provider，因此既可以运行 `chatcrs admin token refresh --profile <profile>`，也可以运行 `chatenv token refresh CRS <profile>`：
 
 ```text
 ~/.chatarch/envs/CRS/<profile>.env     # 稳定配置

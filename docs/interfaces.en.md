@@ -11,7 +11,7 @@ chatcrs
 │   ├── login                      # POST /web/auth/login
 │   ├── token                      # local runtime Admin session token cache
 │   │   ├── status                 # token file metadata, no token output
-│   │   ├── refresh                # POST /web/auth/login, then save token file
+│   │   ├── refresh                # POST /web/auth/login; ChatEnv writes token file for provider refresh
 │   │   └── clear                  # dry-run/delete local token file
 │   ├── accounts                   # OpenAI/Codex account state
 │   │   ├── usage                  # GET /admin/openai-accounts
@@ -39,7 +39,7 @@ chatcrs
 | `chatcrs health` | `GET /health` | None; configured base URL field or `--base-url` | No | health-check helper |
 | `chatcrs admin login` | `POST /web/auth/login` | configured admin identity/password fields, or explicit options | No durable mutation by default; `--save-token` writes the runtime token file | `CrsHttpClient.login` |
 | `chatcrs admin token status` | local token file read | CRS profile + runtime token store | No | `CrsTokenStore.status` |
-| `chatcrs admin token refresh` | `POST /web/auth/login`, then local token file write | Admin username/password | Writes `~/.chatarch/tokens/CRS/<profile>.json` | `CrsHttpClient.login(save_token=True)` |
+| `chatcrs admin token refresh` | `POST /web/auth/login`; `chatenv token refresh CRS <profile>` uses the same provider and lets ChatEnv write the token file | Admin username/password from matching stable `envs/CRS/<profile>.env` profile | Writes `~/.chatarch/tokens/CRS/<profile>.json` only through ChatEnv token-store persistence | `chatcrs.tokens.refresh_chatenv_token` / `CrsHttpClient.login(save_token=True)` |
 | `chatcrs admin token clear` | local token file delete | CRS profile + runtime token store | Dry-run by default; deletes only with `--execute` | `CrsTokenStore.clear` |
 | `chatcrs admin accounts usage` | `GET /admin/openai-accounts` | Admin bearer token, resolved from profile/login | No | `CrsHttpClient.accounts_usage` |
 | `chatcrs admin accounts refresh-status` | `POST /admin/openai-accounts/{account_id}/reset-status` | Admin bearer token | No by default; calls endpoint only with `--execute` | `CrsHttpClient.reset_openai_account_status` |

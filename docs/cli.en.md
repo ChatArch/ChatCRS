@@ -41,7 +41,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 |---|---|---|
 | CRS health | `chatcrs health` | Read-only HTTP health summary |
 | Admin login | `chatcrs admin login` | Verifies credentials; reports token presence only; `--save-token` writes the runtime token store |
-| Admin token cache | `chatcrs admin token status`, `chatcrs admin token refresh`, `chatcrs admin token clear` | Manages short-lived Admin session tokens under `~/.chatarch/tokens/CRS/<profile>.json`; status output never prints tokens |
+| Admin token cache | `chatcrs admin token status`, `chatcrs admin token refresh`, `chatcrs admin token clear` | Manages short-lived Admin session tokens under `~/.chatarch/tokens/CRS/<profile>.json`; `chatcrs admin token refresh` is the ChatCRS-native command, and installed ChatCRS also registers the same provider for `chatenv token refresh CRS <profile>`; status output never prints tokens |
 | Account usage | `chatcrs admin accounts usage` | Admin HTTP API; redacted usage/status/scheduling summary |
 | Account status reset | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS reset-status; not an OAuth refresh-token force-refresh |
 | API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted key values, status, limits, stats, and last-usage summaries |
