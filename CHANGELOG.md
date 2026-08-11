@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-08-11 - 0.2.6
+
+### Changed
+
+- Require `chatenv>=0.2.7,<0.3.0` and register a `chatenv.token_refreshers` provider so `chatenv token refresh CRS <profile>` refreshes CRS Admin session tokens through ChatCRS-owned `/web/auth/login` semantics.
+- Keep ChatEnv as the owner of token-store writes for provider refreshes; ChatCRS returns opaque `admin_session` values plus redacted base URL/user metadata and does not write the token file inside the provider hook.
+- Make provider refresh use the matching stable `envs/CRS/<profile>.env` profile only, without falling back to ambient process env values for named profiles.
+
 ## 2026-08-11 - 0.2.5
 
 ### Changed

@@ -7,7 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from chatenv import TokenStore
+from chatenv import EnvStore, TokenRefreshResult, TokenStore, get_paths
+from chatenv.tokens import normalize_token_profile
+
+from chatcrs.config import ChatcrsConfig
 
 if TYPE_CHECKING:
     from chatcrs.remote import CrsProfile
@@ -40,6 +43,106 @@ def _parse_iso(value: Any) -> datetime | None:
 def base_url_hash(base_url: str) -> str:
     normalized = base_url.rstrip("/")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def _expires_at_from_expires_in(expires_in: Any) -> str:
+    if expires_in is None:
+        return ""
+    try:
+        seconds = int(float(expires_in))
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    return _iso(_now() + timedelta(seconds=seconds))
+
+
+def _load_refresh_profile_values(
+    profile: str | None,
+    *,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+) -> tuple[str, dict[str, str]]:
+    profile_name = normalize_token_profile(profile)
+    store = env_store or EnvStore(get_paths(home).envs_dir)
+    try:
+        profile_path = (
+            store.active_path(ChatcrsConfig)
+            if profile_name == "default"
+            else store.profile_path(ChatcrsConfig, profile_name)
+        )
+    except ValueError as exc:
+        raise ValueError(f"CRS ChatEnv profile not found or invalid: {profile_name}") from exc
+    if not profile_path.exists():
+        raise ValueError(f"CRS ChatEnv profile not found or invalid: {profile_name}")
+    try:
+        values = (
+            store.load_active(ChatcrsConfig)
+            if profile_name == "default"
+            else store.load_profile(ChatcrsConfig, profile_name)
+        )
+    except ValueError as exc:
+        raise ValueError(f"CRS ChatEnv profile not found or invalid: {profile_name}") from exc
+    return profile_name, {str(key): str(value) for key, value in values.items() if value is not None}
+
+
+def _refresh_client_class():
+    from chatcrs.remote import CrsHttpClient
+
+    return CrsHttpClient
+
+
+def refresh_chatenv_token(
+    *,
+    service: str,
+    profile: str,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+    token_store: TokenStore | None = None,
+) -> TokenRefreshResult:
+    """Refresh a CRS Admin session token for ChatEnv's provider lifecycle.
+
+    ChatCRS owns the CRS `/web/auth/login` semantics. ChatEnv owns the actual
+    token-store write for `chatenv token refresh CRS <profile>`, so this
+    provider returns opaque values plus a safe summary and never writes the
+    token file itself.
+    """
+
+    del token_store  # ChatEnv owns persistence after this provider returns.
+    if service != SERVICE_NAME:
+        raise ValueError(f"ChatCRS can refresh only {SERVICE_NAME} tokens")
+    profile_name, values = _load_refresh_profile_values(profile, home=home, env_store=env_store)
+    required = ["CRS_API_BASE", "CRS_USERNAME", "CRS_PASSWORD"]
+    for key in required:
+        if not values.get(key):
+            raise ValueError(f"CRS ChatEnv profile {profile_name} is missing {key}")
+
+    from chatcrs.remote import CrsProfile
+
+    base_url = values["CRS_API_BASE"].rstrip("/")
+    crs_profile = CrsProfile(
+        base_url=base_url,
+        api_key=values.get("CRS_API_KEY", ""),
+        username=values["CRS_USERNAME"],
+        password=values["CRS_PASSWORD"],
+        admin_token="",
+    )
+    paths = get_paths(home)
+    client = _refresh_client_class()(crs_profile, timeout=20.0, profile_name=profile_name, home=paths.home_dir, explicit_admin_token=True)
+    login_payload = client.login(save_token=False)
+    token = getattr(client, "_admin_token", "")
+    if not isinstance(token, str) or not token:
+        raise ValueError("CRS admin login did not return a session token")
+    return TokenRefreshResult(
+        values={"access_token": token},
+        token_type=TOKEN_TYPE,
+        summary={
+            "base_url": base_url,
+            "base_url_hash": base_url_hash(base_url),
+            "username": str(login_payload.get("username") or crs_profile.username or ""),
+        },
+        expires_at=_expires_at_from_expires_in(login_payload.get("expiresIn")),
+    )
 
 
 class CrsTokenStore:
@@ -160,4 +263,4 @@ class CrsTokenStore:
         return self._store.clear(SERVICE_NAME, self.profile_name, execute=execute)
 
 
-__all__ = ["CrsTokenStore", "base_url_hash"]
+__all__ = ["CrsTokenStore", "base_url_hash", "refresh_chatenv_token"]

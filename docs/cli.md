@@ -41,7 +41,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 |---|---|---|
 | CRS health | `chatcrs health` | 只读 HTTP health 摘要 |
 | 管理员登录 | `chatcrs admin login` | HTTP 登录验证，只报告 token 是否存在，不打印 token；`--save-token` 可写入 runtime token store |
-| Admin token cache | `chatcrs admin token status`, `chatcrs admin token refresh`, `chatcrs admin token clear` | 管理 `~/.chatarch/tokens/CRS/<profile>.json` 中的短期 Admin session token；状态输出不打印 token |
+| Admin token cache | `chatcrs admin token status`, `chatcrs admin token refresh`, `chatcrs admin token clear` | 管理 `~/.chatarch/tokens/CRS/<profile>.json` 中的短期 Admin session token；`chatcrs admin token refresh` 是 ChatCRS 本地命令，安装 ChatCRS 后也可用 `chatenv token refresh CRS <profile>` 走同一 provider；状态输出不打印 token |
 | 账号 usage | `chatcrs admin accounts usage` | Admin HTTP API；脱敏 usage/status/scheduling 摘要 |
 | 账号状态 reset | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 才调用 CRS reset-status；不是 OAuth refresh-token 强刷 |
 | API key 统计 | `chatcrs admin keys list`, `chatcrs admin keys show` | key 值脱敏，返回状态、限制、统计和 last-usage 摘要 |
