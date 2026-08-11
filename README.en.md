@@ -46,7 +46,11 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 ├── --tree  # Print the registered command tree.
 ├── health [--base-url <BASE-URL>] [--json-output]  # Verify the CRS /health endpoint.
 ├── admin  # Remote CRS administrator operations via HTTPS Admin API.
-│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── login [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--save-token] [--json-output]  # Verify CRS admin login without printing the session token.
+│   ├── token  # Manage cached CRS admin session tokens in the ChatArch token store.
+│   │   ├── status [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Show cached CRS admin token metadata without printing the token.
+│   │   ├── refresh [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # Login and save a fresh CRS admin session token.
+│   │   └── clear [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Clear the cached CRS admin session token.
 │   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
 │   │   ├── usage [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
 │   │   └── refresh-status <ACCOUNT-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
@@ -74,6 +78,11 @@ Run `chatcrs --tree` to read back the same command tree from the live Click regi
 ```bash
 chatcrs health --base-url https://crs.example.com --json-output
 chatcrs admin login --profile admin --json-output
+chatcrs admin login --profile admin --save-token --json-output
+chatcrs admin token status --profile admin --json-output
+chatcrs admin token refresh --profile admin --json-output
+chatcrs admin token clear --profile admin --json-output
+chatcrs admin token clear --profile admin --execute --json-output
 chatcrs admin accounts usage --profile admin --json-output
 chatcrs admin accounts refresh-status <account_id> --profile admin --json-output
 chatcrs admin accounts refresh-status <account_id> --profile admin --execute --json-output
