@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from chatcrs.cli import main
-from chatcrs.remote import CrsApiError, CrsHttpClient, CrsProfile, load_crs_profile
+from chatcrs.remote import CrsApiError, CrsHttpClient, CrsProfile, build_stats_time_range_payload, load_crs_profile
 from chatcrs.tokens import CrsTokenStore
 
 CRS_ENV_KEYS = (
@@ -33,6 +34,7 @@ def isolate_crs_profile_env(tmp_path, monkeypatch):
 
 class FakeCrsHandler(BaseHTTPRequestHandler):
     admin_token = "admin-session-token"
+    last_batch_stats_body: dict[str, Any] | None = None
 
     def log_message(self, format: str, *args: object) -> None:  # pragma: no cover - silence tests
         return None
@@ -70,6 +72,7 @@ class FakeCrsHandler(BaseHTTPRequestHandler):
             if not self._require_admin():
                 return
             body = self._read_json()
+            FakeCrsHandler.last_batch_stats_body = body
             self._send_json(
                 200,
                 {
@@ -268,6 +271,8 @@ def test_remote_admin_cli_reports_accounts_usage_and_key_stats_without_secrets()
                 "--password",
                 "secret",
                 "--include-stats",
+                "--time-range",
+                "30days",
                 "--json-output",
             ],
         )
@@ -277,10 +282,24 @@ def test_remote_admin_cli_reports_accounts_usage_and_key_stats_without_secrets()
         assert key_payload["keys"][0]["id"] == "key_1"
         assert key_payload["keys"][0]["stats"]["total"]["requests"] == 3
         assert key_payload["keys"][0]["last_usage"]["accountName"] == "codex-pro"
+        assert key_payload["time_range"] == "30days"
+        assert key_payload["stats_time_range"] == "custom"
+        stats_body = FakeCrsHandler.last_batch_stats_body
+        assert stats_body is not None
+        assert stats_body["keyIds"] == ["key_1"]
+        assert stats_body["timeRange"] == "custom"
+        assert stats_body["startDate"] == key_payload["stats_start_date"]
+        assert stats_body["endDate"] == key_payload["stats_end_date"]
         assert "should-not-leak" not in key_result.output
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_legacy_30days_key_stats_range_uses_crs_custom_date_window():
+    payload = build_stats_time_range_payload("30days", today=date(2026, 8, 11))
+
+    assert payload == {"timeRange": "custom", "startDate": "2026-07-13", "endDate": "2026-08-11"}
 
 
 def test_api_key_only_cli_reports_key_info_without_admin_credentials():

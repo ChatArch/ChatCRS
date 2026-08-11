@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Translate legacy `chatcrs admin keys --time-range 30days` requests into a CRS Admin API `custom` 30-day date window so key usage stats no longer silently fall through to empty results.
+
 ## 2026-08-11 - 0.2.4
 
 ### Added
