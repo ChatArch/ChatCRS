@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.10
+
+### Fixed
+
+- Let `chatcrs codex usage --profile <profile>` use a stored `account_id` in the `OpenAI` token-store profile before falling back to the OpenAI accounts API, so profile-only quota checks work for Codex OAuth tokens whose account-metadata endpoint returns 403.
+- Preserve non-secret account mapping metadata (`account_id`, `account_label`, `account_name`) across `chatenv token refresh OpenAI <profile>` writes while keeping safe summaries limited to presence and account-id hash.
+
 ## 2026-08-12 - 0.2.9
 
 ### Fixed

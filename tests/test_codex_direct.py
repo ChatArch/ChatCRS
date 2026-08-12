@@ -101,9 +101,9 @@ def test_openai_chatenv_refresh_provider_prefers_rotated_token_store_refresh(mon
     TokenStore(home=home).write(
         "OpenAI",
         "wzh",
-        values={"refresh_token": "refresh-secret"},
+        values={"refresh_token": "refresh-secret", "account_id": "acct_123", "account_label": "wzh"},
         token_type="openai_oauth",
-        summary={"refresh_token_present": True},
+        summary={"refresh_token_present": True, "account_id_present": True},
     )
     transport = FakeCodexTransport()
     monkeypatch.setattr(codex_direct, "_request_json", transport)
@@ -112,6 +112,9 @@ def test_openai_chatenv_refresh_provider_prefers_rotated_token_store_refresh(mon
 
     assert result.values["access_token"] == "access-secret"
     assert result.values["refresh_token"] == "rotated-refresh-secret"
+    assert result.values["account_id"] == "acct_123"
+    assert result.values["account_label"] == "wzh"
+    assert result.summary["account_id_present"] is True
     assert transport.calls[0]["data"]["refresh_token"] == "refresh-secret"
 
 
@@ -165,6 +168,34 @@ def test_codex_account_can_use_openai_token_store(monkeypatch, tmp_path: Path):
     assert payload["token_service"] == "OpenAI"
     assert payload["account_count"] == 1
     assert not (home / "tokens" / "Codex" / "wzh.json").exists()
+
+
+def test_codex_usage_can_use_token_store_account_id_without_accounts_api(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    TokenStore(home=home).write(
+        "OpenAI",
+        "wzh",
+        values={"access_token": "access-secret", "account_id": "acct_123"},
+        token_type="openai_oauth",
+        summary={"access_token_present": True, "account_id_present": True},
+    )
+    transport = FakeCodexTransport()
+    monkeypatch.setattr(codex_direct, "_request_json", transport)
+
+    payload = codex_direct.inspect_usage(profile="wzh", home=home, refresh=False)
+
+    assert payload["ok"] is True
+    assert payload["profile"] == "wzh"
+    assert payload["account_id"] == "acct_123"
+    assert payload["token_service"] == "OpenAI"
+    assert payload["account_resolution"] == {
+        "source": "token_store_account_id",
+        "account_id_hash": "182d1cfdc619",
+    }
+    called_urls = [call["url"] for call in transport.calls]
+    assert called_urls == ["https://chatgpt.com/backend-api/codex/usage"]
 
 
 def test_codex_usage_can_resolve_unique_account_from_profile(monkeypatch, tmp_path: Path):
