@@ -26,6 +26,7 @@ chatcrs
 │   │   ├── status                 # local OpenAI token-store metadata, no token output
 │   │   └── refresh                # POST https://auth.openai.com/oauth/token
 │   ├── account                    # GET https://auth.openai.com/api/accounts
+│   ├── quota                      # POST https://chatgpt.com/backend-api/codex/responses
 │   └── usage                      # GET https://chatgpt.com/backend-api/codex/usage
 └── service                        # server-local service lifecycle
     ├── install                    # local crs install; dry-run by default
@@ -55,6 +56,7 @@ chatcrs
 | `chatcrs codex token status` | local `tokens/OpenAI/<profile>.json` metadata | OpenAI ChatEnv profile/token store | No | `chatcrs.codex_direct.token_status` |
 | `chatcrs codex token refresh` | `POST https://auth.openai.com/oauth/token` | OpenAI refresh token from explicit option or `envs/OpenAI/<profile>.env` / `tokens/OpenAI/<profile>.json` | No durable mutation by default; durable refresh should use `chatenv token refresh OpenAI <profile>` so ChatEnv writes `tokens/OpenAI/<profile>.json` | `chatcrs.codex_direct.refresh_access_token` / `chatcrs.codex_direct.refresh_chatenv_token` |
 | `chatcrs codex account` | `GET https://auth.openai.com/api/accounts` | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh | No | `chatcrs.codex_direct.inspect_account` |
+| `chatcrs codex quota` | `POST https://chatgpt.com/backend-api/codex/responses` with `store:false`, `stream:true`, and stored or explicit `chatgpt-account-id`; body is only used as a quota smoke and output keeps quota headers plus account-id hash | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh; profile-only use prefers `tokens/OpenAI/<profile>.json` `values.account_id` | Sends a minimal upstream smoke request; does not write local state | `chatcrs.codex_direct.inspect_quota` |
 | `chatcrs codex usage` | `GET https://chatgpt.com/backend-api/codex/usage` with stored or explicit `chatgpt-account-id`; `GET https://auth.openai.com/api/accounts` only when no token-store account mapping exists and `--account-id` is omitted | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh; profile-only use prefers `tokens/OpenAI/<profile>.json` `values.account_id` and otherwise auto-resolves a unique account id | No | `chatcrs.codex_direct.inspect_usage` |
 | `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
@@ -100,7 +102,7 @@ The canonical CRS ChatEnv namespace is `CRS`; stable CRS configuration lives in 
 - `POST /admin/api-keys/batch-stats`
 - `POST /admin/api-keys/batch-last-usage`
 - `GET /openai/key-info`
-- OpenAI/Codex direct APIs used by `chatcrs codex ...`: `POST https://auth.openai.com/oauth/token`, `GET https://auth.openai.com/api/accounts`, and `GET https://chatgpt.com/backend-api/codex/usage`.
+- OpenAI/Codex direct APIs used by `chatcrs codex ...`: `POST https://auth.openai.com/oauth/token`, `GET https://auth.openai.com/api/accounts`, `GET https://chatgpt.com/backend-api/codex/usage`, and `POST https://chatgpt.com/backend-api/codex/responses`.
 
 ## Explicit gaps / out-of-scope task surfaces
 

@@ -29,6 +29,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   ├── quota [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--model <MODEL>] [--timeout <TIMEOUT>] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
     ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
@@ -52,7 +53,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | Account status reset | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls CRS reset-status; not an OAuth refresh-token force-refresh |
 | API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted key values, status, limits, stats, and last-usage summaries |
 | API-key-only self info | `chatcrs key info` | No administrator login required |
-| OpenAI/Codex direct token/account/usage | `chatcrs codex token ...`, `chatcrs codex account`, `chatcrs codex usage` | Calls OpenAI/Codex OAuth and backend APIs directly; output is limited to redacted token status, account summaries, and usage/quota header summaries |
+| OpenAI/Codex direct token/account/usage | `chatcrs codex token ...`, `chatcrs codex account`, `chatcrs codex quota`, `chatcrs codex usage` | Calls OpenAI/Codex OAuth and backend APIs directly; output is limited to redacted token status, account summaries, and usage/quota header summaries |
 | Local service lifecycle | `chatcrs service ...` | Runs local `crs` commands only on the CRS server; outside-server management must use HTTP/Admin API or a new service-side API/agent |
 
 ## Registered command list
@@ -72,7 +73,8 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | `chatcrs codex token status` | Cached OpenAI OAuth token metadata |
 | `chatcrs codex token refresh` | Refresh an OpenAI access token; prefer `chatenv token refresh OpenAI <profile>` |
 | `chatcrs codex account` | Direct OpenAI Codex account metadata inspection |
-| `chatcrs codex usage` | Direct Codex usage and quota inspection |
+| `chatcrs codex quota` | Profile-only Codex responses quota smoke; returns quota headers and account-id hash |
+| `chatcrs codex usage` | Direct Codex usage inspection via usage endpoint |
 | `chatcrs service install` | Local CRS install command plan/execute |
 | `chatcrs service update` | Local CRS update command plan/execute |
 | `chatcrs service start` | Local CRS start command plan/execute |
@@ -115,10 +117,11 @@ chatcrs codex token status --profile default --json-output
 chatcrs codex token refresh --profile default --json-output
 chatenv token refresh OpenAI default
 chatcrs codex account --profile default --json-output
+chatcrs codex quota --profile default --json-output
 chatcrs codex usage --profile default --json-output
 ```
 
-The `codex` branch calls OpenAI/Codex OAuth and backend APIs directly instead of using the CRS Admin API. Stable OAuth profile data uses ChatEnv's built-in `OpenAI` namespace (`envs/OpenAI/<profile>.env`), and runtime access/refresh token state uses the same `OpenAI` token store (`tokens/OpenAI/<profile>.json`). If token-store values include a non-secret `account_id` mapping, `chatcrs codex usage --profile <profile>` uses it for quota lookup before falling back to the OpenAI accounts API to auto-resolve one unique account. Durable refresh should run `chatenv token refresh OpenAI <profile>`; `chatcrs codex ...` only consumes that state and prints redacted token/account/usage summaries, never raw access tokens, refresh tokens, or id tokens.
+The `codex` branch calls OpenAI/Codex OAuth and backend APIs directly instead of using the CRS Admin API. Stable OAuth profile data uses ChatEnv's built-in `OpenAI` namespace (`envs/OpenAI/<profile>.env`), and runtime access/refresh token state uses the same `OpenAI` token store (`tokens/OpenAI/<profile>.json`). If token-store values include a non-secret `account_id` mapping, `chatcrs codex quota --profile <profile>` uses it for a Codex responses quota smoke; `chatcrs codex usage --profile <profile>` keeps the legacy usage endpoint behavior before falling back to the OpenAI accounts API to auto-resolve one unique account. Durable refresh should run `chatenv token refresh OpenAI <profile>`; `chatcrs codex ...` only consumes that state and prints redacted token/account/usage summaries, never raw access tokens, refresh tokens, or id tokens.
 
 ## Server-local service { #server-local-service }
 

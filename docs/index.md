@@ -96,7 +96,7 @@ ChatCRS 是 ChatArch 的 CRS 管理 CLI。外部管理面聚焦 CRS HTTP/Admin A
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 调 CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | 默认脱敏，可选 stats |
 | API-key-only info | `chatcrs key info` | 不需要管理员登录 |
-| Codex direct usage | `chatcrs codex account`, `chatcrs codex usage` | 直接查 OpenAI/Codex account 与 usage/quota，输出脱敏 |
+| Codex direct usage | `chatcrs codex account`, `chatcrs codex quota`, `chatcrs codex usage` | 直接查 OpenAI/Codex account 与 usage/quota，输出脱敏 |
 | Server-local service | `chatcrs service ...` | 只在 CRS 服务器本机执行本机命令 |
 
 接口级映射见：[命令与 HTTP 接口映射](interfaces.md)。

@@ -29,6 +29,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   ├── quota [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--model <MODEL>] [--timeout <TIMEOUT>] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
     ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
@@ -52,7 +53,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | 账号状态 reset | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 才调用 CRS reset-status；不是 OAuth refresh-token 强刷 |
 | API key 统计 | `chatcrs admin keys list`, `chatcrs admin keys show` | key 值脱敏，返回状态、限制、统计和 last-usage 摘要 |
 | 普通 API key 自查 | `chatcrs key info` | 不需要管理员登录 |
-| OpenAI/Codex direct token/account/usage | `chatcrs codex token ...`, `chatcrs codex account`, `chatcrs codex usage` | 直接调用 OpenAI/Codex OAuth 与 backend API；输出只包含脱敏 token 状态、account 摘要、usage/quota header 摘要 |
+| OpenAI/Codex direct token/account/usage | `chatcrs codex token ...`, `chatcrs codex account`, `chatcrs codex quota`, `chatcrs codex usage` | 直接调用 OpenAI/Codex OAuth 与 backend API；输出只包含脱敏 token 状态、account 摘要、usage/quota header 摘要 |
 | 本机 service lifecycle | `chatcrs service ...` | 只在 CRS 服务器本机执行本机 `crs` 命令；外部管理必须走 HTTP/Admin API 或新增服务端 API/agent |
 
 ## 注册命令清单
@@ -72,7 +73,8 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | `chatcrs codex token status` | Cached OpenAI OAuth token metadata |
 | `chatcrs codex token refresh` | Refresh an OpenAI access token; prefer `chatenv token refresh OpenAI <profile>` |
 | `chatcrs codex account` | Direct OpenAI Codex account metadata inspection |
-| `chatcrs codex usage` | Direct Codex usage and quota inspection |
+| `chatcrs codex quota` | Profile-only Codex responses quota smoke; returns quota headers and account-id hash |
+| `chatcrs codex usage` | Direct Codex usage inspection via usage endpoint |
 | `chatcrs service install` | Local CRS install command plan/execute |
 | `chatcrs service update` | Local CRS update command plan/execute |
 | `chatcrs service start` | Local CRS start command plan/execute |
@@ -115,10 +117,11 @@ chatcrs codex token status --profile default --json-output
 chatcrs codex token refresh --profile default --json-output
 chatenv token refresh OpenAI default
 chatcrs codex account --profile default --json-output
+chatcrs codex quota --profile default --json-output
 chatcrs codex usage --profile default --json-output
 ```
 
-`codex` 分支直接调用 OpenAI/Codex OAuth 与 backend API，不经过 CRS Admin API。稳定 OAuth profile 使用 ChatEnv 内置 `OpenAI` namespace（`envs/OpenAI/<profile>.env`），runtime access/refresh token 使用同一 `OpenAI` token store（`tokens/OpenAI/<profile>.json`）。如果 token-store values 中保存了非 secret `account_id` 映射，`chatcrs codex usage --profile <profile>` 会优先用它查询 quota；没有映射时才退回 OpenAI accounts API 自动解析唯一账号。持久刷新应运行 `chatenv token refresh OpenAI <profile>`；`chatcrs codex ...` 只消费该状态并输出脱敏 token/account/usage 摘要，不打印 access token、refresh token 或 id token。
+`codex` 分支直接调用 OpenAI/Codex OAuth 与 backend API，不经过 CRS Admin API。稳定 OAuth profile 使用 ChatEnv 内置 `OpenAI` namespace（`envs/OpenAI/<profile>.env`），runtime access/refresh token 使用同一 `OpenAI` token store（`tokens/OpenAI/<profile>.json`）。如果 token-store values 中保存了非 secret `account_id` 映射，`chatcrs codex quota --profile <profile>` 会用它运行 Codex responses quota smoke；`chatcrs codex usage --profile <profile>` 保留旧 usage endpoint 行为，没有映射时才退回 OpenAI accounts API 自动解析唯一账号。持久刷新应运行 `chatenv token refresh OpenAI <profile>`；`chatcrs codex ...` 只消费该状态并输出脱敏 token/account/usage 摘要，不打印 access token、refresh token 或 id token。
 
 ## Server-local service { #server-local-service }
 

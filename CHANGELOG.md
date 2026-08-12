@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.11
+
+### Added
+
+- Add `chatcrs codex quota --profile <profile>` as the profile-only Codex quota smoke command. It uses the same OpenAI ChatEnv profile/token lifecycle, resolves account id from the OpenAI token store, calls `POST https://chatgpt.com/backend-api/codex/responses` with `store:false` / `stream:true`, and prints only status, account-id hash, and `x-codex-*` quota headers.
+
 ## 2026-08-12 - 0.2.10
 
 ### Fixed
