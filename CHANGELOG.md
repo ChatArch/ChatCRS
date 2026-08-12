@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-08-13 - 0.2.14
+
+### Added
+
+- Add non-secret OpenAI profile relay base URL support: `OPENAI_OAUTH_BASE_URL` overrides OAuth token/accounts upstreams and `CHATGPT_BACKEND_BASE_URL` overrides ChatGPT backend upstreams for `chatcrs codex ...`.
+- Route `chatcrs codex usage` through the ChatGPT `wham/usage` endpoint while preserving the profile-only `account_id` token-store resolution path.
+
+### Fixed
+
+- Redact raw Codex usage identity fields (`account_id`, `email`, `user_id`) from JSON output and expose only `account_id_hash` plus usage/quota data.
+- Make `chatcrs codex account` claims-first: it returns a safe account summary from access-token claims/token-store metadata and keeps the accounts API as a redacted probe so Cloudflare-protected accounts responses do not prevent account inspection.
+
 ## 2026-08-12 - 0.2.13
 
 ### Fixed

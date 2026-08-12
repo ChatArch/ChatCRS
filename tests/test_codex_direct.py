@@ -56,7 +56,7 @@ class FakeCodexTransport:
                 "x-codex-primary-window-minutes": "300",
                 "x-codex-secondary-used-percent": "3",
             }
-        if url == "https://chatgpt.com/backend-api/codex/usage":
+        if url == "https://chatgpt.com/backend-api/wham/usage":
             assert headers["authorization"] == "Bearer access-secret"
             assert headers["ChatGPT-Account-ID"] == "acct_123"
             assert headers["originator"] == "codex_cli_rs"
@@ -208,14 +208,16 @@ def test_codex_usage_can_use_token_store_account_id_without_accounts_api(monkeyp
 
     assert payload["ok"] is True
     assert payload["profile"] == "wzh"
-    assert payload["account_id"] == "acct_123"
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert "account_id" not in payload
     assert payload["token_service"] == "OpenAI"
     assert payload["account_resolution"] == {
         "source": "token_store_account_id",
         "account_id_hash": "182d1cfdc619",
     }
     called_urls = [call["url"] for call in transport.calls]
-    assert called_urls == ["https://chatgpt.com/backend-api/codex/usage"]
+    assert called_urls == ["https://chatgpt.com/backend-api/wham/usage"]
+    assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_codex_quota_uses_responses_smoke_and_redacts_account_id(monkeypatch, tmp_path: Path):
@@ -249,6 +251,58 @@ def test_codex_quota_uses_responses_smoke_and_redacts_account_id(monkeypatch, tm
     assert transport.calls[-1]["url"] == "https://chatgpt.com/backend-api/codex/responses"
 
 
+def test_codex_profile_can_route_auth_accounts_usage_and_quota_through_relay(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(
+        OpenAIConfig,
+        "wzh",
+        {
+            "OPENAI_REFRESH_TOKEN": "refresh-secret",
+            "OPENAI_OAUTH_BASE_URL": "https://auth.tencent-am.wzhecnu.cn",
+            "CHATGPT_BACKEND_BASE_URL": "https://gpt.tencent-am.wzhecnu.cn/backend-api",
+        },
+    )
+    TokenStore(home=home).write(
+        "OpenAI",
+        "wzh",
+        values={"refresh_token": "refresh-secret", "account_id": "acct_123"},
+        token_type="openai_oauth",
+        summary={"refresh_token_present": True, "account_id_present": True},
+    )
+
+    def relay_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        if url == "https://auth.tencent-am.wzhecnu.cn/oauth/token":
+            return 200, {"access_token": "access-secret", "refresh_token": "rotated-refresh-secret", "expires_in": 3600}, {}
+        if url == "https://gpt.tencent-am.wzhecnu.cn/backend-api/wham/usage":
+            assert headers["authorization"] == "Bearer access-secret"
+            assert headers["ChatGPT-Account-ID"] == "acct_123"
+            return 200, {"summary": {"tokens": 42}, "email": "user@example.com", "user_id": "user_123", "account_id": "acct_123"}, {}
+        if url == "https://gpt.tencent-am.wzhecnu.cn/backend-api/codex/responses":
+            assert headers["authorization"] == "Bearer access-secret"
+            assert headers["ChatGPT-Account-ID"] == "acct_123"
+            return 200, {}, {"x-codex-primary-used-percent": "7", "x-codex-primary-window-minutes": "10080"}
+        raise AssertionError(f"unexpected relay request {method} {url}")
+
+    monkeypatch.setattr(codex_direct, "_request_json", relay_transport)
+
+    refresh_payload = codex_direct.refresh_chatenv_token(service="OpenAI", profile="wzh", home=home, env_store=env_store)
+    TokenStore(home=home).write("OpenAI", "wzh", values=refresh_payload.values | {"account_id": "acct_123"}, token_type="openai_oauth")
+    usage = codex_direct.inspect_usage(profile="wzh", home=home)
+    quota = codex_direct.inspect_quota(profile="wzh", home=home)
+
+    assert refresh_payload.summary["oauth_base_url_hash"] == codex_direct._base_url_hash("https://auth.tencent-am.wzhecnu.cn")
+    assert usage["ok"] is True
+    assert usage["usage_url"] == "https://gpt.tencent-am.wzhecnu.cn/backend-api/wham/usage"
+    assert usage["account_id_hash"] == "182d1cfdc619"
+    assert "acct_123" not in json.dumps(usage, ensure_ascii=False)
+    assert "user@example.com" not in json.dumps(usage, ensure_ascii=False)
+    assert quota["ok"] is True
+    assert quota["responses_url"] == "https://gpt.tencent-am.wzhecnu.cn/backend-api/codex/responses"
+
+
 def test_codex_usage_can_resolve_unique_account_from_profile(monkeypatch, tmp_path: Path):
     from chatcrs import codex_direct
 
@@ -267,15 +321,18 @@ def test_codex_usage_can_resolve_unique_account_from_profile(monkeypatch, tmp_pa
 
     assert payload["ok"] is True
     assert payload["profile"] == "wzh"
-    assert payload["account_id"] == "acct_123"
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert "account_id" not in payload
     assert payload["token_service"] == "OpenAI"
     assert payload["account_resolution"] == {
         "source": "profile_account_metadata",
         "account_count": 1,
         "status": 200,
+        "account_id_hash": "182d1cfdc619",
     }
     called_urls = [call["url"] for call in transport.calls]
-    assert called_urls == ["https://auth.openai.com/api/accounts", "https://chatgpt.com/backend-api/codex/usage"]
+    assert called_urls == ["https://auth.openai.com/api/accounts", "https://chatgpt.com/backend-api/wham/usage"]
+    assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_codex_usage_refuses_ambiguous_profile_accounts(monkeypatch, tmp_path: Path):
@@ -329,15 +386,79 @@ def test_codex_account_and_usage_use_access_token_without_leaking(monkeypatch):
 
     assert account["ok"] is True
     assert account["account_count"] == 1
-    assert account["accounts"][0]["id"] == "acct_123"
-    assert account["accounts"][0]["refresh_token"] == "[REDACTED]"
+    assert account["accounts"][0]["account_id_hash"] == "182d1cfdc619"
+    assert account["accounts"][0]["email_hash"] == "b4c9a289323b"
+    assert account["accounts"][0]["plan_type"] == "pro"
+    assert account["accounts_api"] == {"ok": True, "status": 200, "account_count": 1, "body_redacted": None, "body_kind": "dict"}
+    dumped_account = json.dumps(account, ensure_ascii=False)
+    assert "acct_123" not in dumped_account
+    assert "user@example.com" not in dumped_account
+    assert "must-not-leak" not in dumped_account
     assert usage["ok"] is True
-    assert usage["account_id"] == "acct_123"
+    assert usage["account_id_hash"] == "182d1cfdc619"
+    assert "account_id" not in usage
     assert usage["rate_limits"]["primary_used_percent"] == 12.5
     assert usage["rate_limits"]["primary_reset_after_seconds"] == 1800.0
     combined = json.dumps({"account": account, "usage": usage}, ensure_ascii=False)
     assert "access-secret" not in combined
     assert "must-not-leak" not in combined
+    assert "acct_123" not in json.dumps(usage, ensure_ascii=False)
+
+
+def test_codex_account_redacts_identity_from_unexpected_accounts_api_body(monkeypatch):
+    from chatcrs import codex_direct
+
+    def identity_body_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        assert url == "https://auth.openai.com/api/accounts"
+        return 200, {
+            "message": "account acct_123 for user@example.com user_123 123e4567-e89b-12d3-a456-426614174000",
+            "account_id": "acct_123",
+            "accountId": "acct_456",
+            "user_id": "user_123",
+            "email": "user@example.com",
+            "refresh_token": "must-not-leak",
+        }, {}
+
+    monkeypatch.setattr(codex_direct, "_request_json", identity_body_transport)
+
+    payload = codex_direct.get_account(access_token="access-secret")
+    dumped = json.dumps(payload, ensure_ascii=False)
+
+    assert payload["accounts_api"]["body_redacted"] is not None
+    assert "acct_123" not in dumped
+    assert "acct_456" not in dumped
+    assert "user_123" not in dumped
+    assert "user@example.com" not in dumped
+    assert "123e4567-e89b-12d3-a456-426614174000" not in dumped
+    assert "must-not-leak" not in dumped
+
+
+def test_codex_quota_redacts_identity_from_non_200_body(monkeypatch):
+    from chatcrs import codex_direct
+
+    def quota_error_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        assert url == "https://chatgpt.com/backend-api/codex/responses"
+        return 403, {
+            "error": "account acct_123 user@example.com user_123 123e4567-e89b-12d3-a456-426614174000",
+            "account_id": "acct_123",
+            "userId": "user_123",
+            "emailAddress": "user@example.com",
+            "access_token": "must-not-leak",
+        }, {}
+
+    monkeypatch.setattr(codex_direct, "_request_json", quota_error_transport)
+
+    payload = codex_direct.get_quota(access_token="access-secret", account_id="acct_123")
+    dumped = json.dumps(payload, ensure_ascii=False)
+
+    assert payload["ok"] is False
+    assert payload["body"] is not None
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert "acct_123" not in dumped
+    assert "user_123" not in dumped
+    assert "user@example.com" not in dumped
+    assert "123e4567-e89b-12d3-a456-426614174000" not in dumped
+    assert "must-not-leak" not in dumped
 
 
 def test_codex_cli_surface_is_registered():
@@ -350,6 +471,50 @@ def test_codex_cli_surface_is_registered():
     assert "quota [--profile <PROFILE>]" in result.output
     assert "usage [--profile <PROFILE>]" in result.output
     assert "tokens/Codex" not in result.output
+
+
+def test_codex_cli_token_refresh_uses_profile_oauth_base_url(monkeypatch, tmp_path: Path):
+    from chatcrs import cli
+
+    home = tmp_path / "chatarch"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(
+        OpenAIConfig,
+        "wzh",
+        {
+            "OPENAI_REFRESH_TOKEN": "profile-refresh",
+            "OPENAI_OAUTH_BASE_URL": "https://auth.tencent-am.wzhecnu.cn",
+        },
+    )
+    TokenStore(home=home).write(
+        "OpenAI",
+        "wzh",
+        values={"refresh_token": "refresh-secret"},
+        token_type="openai_oauth",
+        summary={"refresh_token_present": True},
+    )
+    called = {}
+
+    monkeypatch.setattr(cli.codex_direct, "read_stored_token", lambda *, profile="default": TokenStore(home=home).read("OpenAI", profile))
+    monkeypatch.setattr(cli.codex_direct, "_openai_profile_values_or_empty", lambda *, profile, home=None: {"OPENAI_OAUTH_BASE_URL": "https://auth.tencent-am.wzhecnu.cn"})
+
+    def fake_refresh_access_token(*, refresh_token, client_id=None, oauth_base_url=None, timeout=20.0):
+        called.update({"refresh_token": refresh_token, "client_id": client_id, "oauth_base_url": oauth_base_url, "timeout": timeout})
+        return {
+            "ok": True,
+            "status": 200,
+            "values": {"access_token": "access-secret"},
+            "safe": {"ok": True, "status": 200, "oauth_base_url_hash": "safe-hash", "token_present": True},
+        }
+
+    monkeypatch.setattr(cli.codex_direct, "refresh_access_token", fake_refresh_access_token)
+
+    result = CliRunner().invoke(main, ["codex", "token", "refresh", "--profile", "wzh", "--json-output"])
+
+    assert result.exit_code == 0, result.output
+    assert called == {"refresh_token": "refresh-secret", "client_id": None, "oauth_base_url": "https://auth.tencent-am.wzhecnu.cn", "timeout": 20.0}
+    assert "refresh-secret" not in result.output
+    assert "access-secret" not in result.output
 
 
 def test_codex_cli_quota_calls_python_api_without_leaking_account_id(monkeypatch):
@@ -424,9 +589,9 @@ def test_codex_cli_usage_allows_profile_only_when_account_can_be_resolved(monkey
             "ok": True,
             "mutated": False,
             "status": 200,
-            "account_id": "acct_123",
+            "account_id_hash": "182d1cfdc619",
             "token_service": "OpenAI",
-            "account_resolution": {"source": "profile_account_metadata", "account_count": 1, "status": 200},
+            "account_resolution": {"source": "profile_account_metadata", "account_count": 1, "status": 200, "account_id_hash": "182d1cfdc619"},
             "rate_limits": {"primary_used_percent": 10.0},
         }
 
@@ -439,7 +604,9 @@ def test_codex_cli_usage_allows_profile_only_when_account_can_be_resolved(monkey
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["account_id"] == "acct_123"
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert "account_id" not in payload
+    assert "acct_123" not in result.output
     assert payload["account_resolution"]["source"] == "profile_account_metadata"
     assert called == {
         "profile": "wzh",
@@ -449,6 +616,29 @@ def test_codex_cli_usage_allows_profile_only_when_account_can_be_resolved(monkey
         "client_id": None,
         "timeout": 20.0,
     }
+
+
+def test_codex_cli_usage_text_output_uses_account_hash(monkeypatch):
+    from chatcrs import cli
+
+    def fake_usage(*, profile, account_id, access_token, refresh, client_id, timeout):
+        return {
+            "ok": True,
+            "mutated": False,
+            "status": 200,
+            "account_id_hash": "182d1cfdc619",
+            "token_service": "OpenAI",
+            "rate_limits": {"primary_used_percent": 10.0},
+        }
+
+    monkeypatch.setattr(cli.codex_direct, "inspect_usage", fake_usage)
+
+    result = CliRunner().invoke(main, ["codex", "usage", "--profile", "wzh"])
+
+    assert result.exit_code == 0, result.output
+    assert "account_id_hash=182d1cfdc619" in result.output
+    assert "account_id=acct_123" not in result.output
+    assert "acct_123" not in result.output
 
 
 def test_codex_cli_usage_calls_python_api(monkeypatch):
@@ -471,7 +661,7 @@ def test_codex_cli_usage_calls_python_api(monkeypatch):
             "ok": True,
             "mutated": False,
             "status": 200,
-            "account_id": "acct_123",
+            "account_id_hash": "182d1cfdc619",
             "token_service": "OpenAI",
             "rate_limits": {"primary_used_percent": 10.0},
             "usage": {"summary": {"tokens": 5}},
@@ -499,6 +689,8 @@ def test_codex_cli_usage_calls_python_api(monkeypatch):
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["token_service"] == "OpenAI"
+    assert "acct_123" not in result.output
+    assert "access-secret" not in result.output
     assert called == {
         "profile": "codex-admin",
         "account_id": "acct_123",

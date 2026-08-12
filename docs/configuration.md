@@ -26,6 +26,17 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 
 `chatcrs admin token status` 只输出 token 文件路径、存在性、是否过期、base URL 是否匹配等元数据；不会打印 token。`chatcrs admin token clear` 默认 dry-run，必须加 `--execute` 才删除本地 token file。
 
+## Codex/OpenAI relay 字段
+
+`chatcrs codex ...` 复用 ChatEnv 的 `OpenAI` namespace。稳定 refresh seed 与非 secret relay 字段在 `envs/OpenAI/<profile>.env`，runtime access/refresh token 与 account metadata 在 `tokens/OpenAI/<profile>.json`。
+
+| 字段 | 用途 | 敏感 |
+|---|---|---|
+| `OPENAI_OAUTH_BASE_URL` | OAuth refresh 与 accounts API base URL；默认 `https://auth.openai.com` | 否 |
+| `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend base URL；默认 `https://chatgpt.com/backend-api` | 否 |
+
+中转只改变目标 base URL。Access token、refresh token、`ChatGPT-Account-ID` 等凭据仍由客户端按请求头或 token-store 管理，不能写入 Nginx/proxy 配置或日志。`account` 输出优先使用 access-token claims 与 token-store metadata 生成安全 `account_summary`，accounts API 只作为 redacted probe；`usage` 输出只保留 `account_id_hash` 与脱敏 body，不打印 raw account id、email 或 user id。
+
 ## 本地/服务端能力边界
 
 当前配置只描述 CRS HTTP/API 连接与凭据。服务进程生命周期、部署目录、Nginx/edge、Redis、release/cutover 等 host-local 信息不属于这套 profile。
