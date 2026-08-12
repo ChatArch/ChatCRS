@@ -1,9 +1,10 @@
-"""Direct OpenAI Codex account and usage helpers.
+"""Direct OpenAI/Codex account and usage helpers backed by ChatEnv.
 
-This module intentionally models only the direct ChatGPT/Codex account surface
-needed for account/usage inspection. It never logs or returns raw token values in
-safe output fields; callers that need persistence should use the explicit token
-store helpers and still render only redacted summaries.
+ChatEnv owns stable OpenAI profiles (``envs/OpenAI/<profile>.env``) and the
+runtime token store (``tokens/OpenAI/<profile>.json``). ChatCRS only provides the
+OpenAI OAuth refresh semantics and consumes the resulting access token for
+Codex account/usage inspection. Safe outputs never include raw access tokens,
+refresh tokens, id tokens, cookies, or API keys.
 """
 
 from __future__ import annotations
@@ -16,19 +17,28 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from chatenv import TokenStore
+from chatenv import EnvStore, OpenAIConfig, TokenRefreshResult, TokenStore, get_paths
+from chatenv.token_refreshers import refresh_token as refresh_runtime_token
+from chatenv.tokens import normalize_token_profile
 
 from chatcrs.redaction import redact
 
 AUTH_BASE_URL = "https://auth.openai.com"
 CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api"
-OAUTH_TOKEN_URL = f"{AUTH_BASE_URL}/oauth/token"
 ACCOUNTS_URL = f"{AUTH_BASE_URL}/api/accounts"
 CODEX_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/usage"
 WHAM_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/wham/usage"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
-CODEX_SERVICE_NAME = "Codex"
-CODEX_TOKEN_TYPE = "openai_codex_oauth"
+OPENAI_SERVICE_NAME = "OpenAI"
+OPENAI_OAUTH_TOKEN_TYPE = "openai_oauth"
+OPENAI_CLIENT_ID_KEYS = ("OPENAI_OAUTH_CLIENT_ID", "OPENAI_CODEX_CLIENT_ID", "OPENAI_CLIENT_ID")
+
+# Backward-compatible constants for callers that imported the 0.2.8 names. The
+# storage service is intentionally OpenAI, not Codex: Codex uses ChatEnv's shared
+# OpenAI profile schema.
+CODEX_SERVICE_NAME = OPENAI_SERVICE_NAME
+CODEX_TOKEN_TYPE = OPENAI_OAUTH_TOKEN_TYPE
+OAUTH_TOKEN_URL = f"{AUTH_BASE_URL}/oauth/token"
 
 
 def _now() -> datetime:
@@ -37,6 +47,23 @@ def _now() -> datetime:
 
 def _iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _is_expired(value: Any) -> bool:
+    expires_at = _parse_iso(value)
+    return expires_at is not None and expires_at <= _now()
 
 
 def _expires_at_from_expires_in(expires_in: Any) -> str:
@@ -72,6 +99,16 @@ def _normalize_headers(headers: dict[str, Any] | None) -> dict[str, str]:
             value = value[0] if value else ""
         normalized[str(key).lower()] = str(value)
     return normalized
+
+
+def _oauth_token_url(oauth_base_url: str | None = None) -> str:
+    return f"{(oauth_base_url or AUTH_BASE_URL).rstrip('/')}/oauth/token"
+
+
+def _base_url_hash(base_url: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(base_url.rstrip("/").encode("utf-8")).hexdigest()[:16]
 
 
 def extract_codex_rate_limit_headers(headers: dict[str, Any] | None) -> dict[str, float | None]:
@@ -123,10 +160,59 @@ def _request_json(
     return status, parsed, response_headers
 
 
+def _token_store(home: str | Path | None = None) -> TokenStore:
+    return TokenStore(home=home)
+
+
+def _token_values(payload: dict[str, Any]) -> dict[str, Any]:
+    values = payload.get("values") if isinstance(payload, dict) else None
+    return values if isinstance(values, dict) else {}
+
+
+def _load_openai_profile_values(
+    profile: str | None,
+    *,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+) -> tuple[str, dict[str, str]]:
+    profile_name = normalize_token_profile(profile)
+    store = env_store or EnvStore(get_paths(home).envs_dir)
+    try:
+        profile_path = (
+            store.active_path(OpenAIConfig)
+            if profile_name == "default"
+            else store.profile_path(OpenAIConfig, profile_name)
+        )
+    except ValueError as exc:
+        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}") from exc
+    if not profile_path.exists():
+        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}")
+    try:
+        values = (
+            store.load_active(OpenAIConfig)
+            if profile_name == "default"
+            else store.load_profile(OpenAIConfig, profile_name)
+        )
+    except ValueError as exc:
+        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}") from exc
+    return profile_name, {str(key): str(value) for key, value in values.items() if value is not None}
+
+
+def _configured_client_id(values: dict[str, str], client_id: str | None = None) -> tuple[str, str]:
+    if client_id:
+        return client_id, "option"
+    for key in OPENAI_CLIENT_ID_KEYS:
+        value = values.get(key)
+        if value:
+            return value, key
+    return DEFAULT_OPENAI_CODEX_CLIENT_ID, "default_codex_client_id"
+
+
 def refresh_access_token(
     *,
     refresh_token: str,
     client_id: str | None = None,
+    oauth_base_url: str | None = None,
     timeout: float = 20.0,
 ) -> dict[str, Any]:
     """Exchange an OpenAI refresh token for a fresh access token."""
@@ -135,7 +221,7 @@ def refresh_access_token(
         raise ValueError("OpenAI refresh token is required")
     status, parsed, _headers = _request_json(
         "POST",
-        OAUTH_TOKEN_URL,
+        _oauth_token_url(oauth_base_url),
         data={
             "grant_type": "refresh_token",
             "client_id": client_id or DEFAULT_OPENAI_CODEX_CLIENT_ID,
@@ -183,6 +269,170 @@ def refresh_access_token(
         "refresh_token_rotated": bool(parsed.get("refresh_token")),
         "expires_at": expires_at,
     }
+
+
+def refresh_chatenv_token(
+    *,
+    service: str,
+    profile: str,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+    token_store: TokenStore | None = None,
+) -> TokenRefreshResult:
+    """Refresh OpenAI OAuth runtime state for ChatEnv's token lifecycle.
+
+    Stable OAuth bootstrap values come from the registered ChatEnv ``OpenAI``
+    profile. Rotated refresh tokens are read from the existing ChatEnv token
+    store when present. ChatEnv owns the final token-store write.
+    """
+
+    if service != OPENAI_SERVICE_NAME:
+        raise ValueError(f"ChatCRS can refresh only {OPENAI_SERVICE_NAME} tokens")
+    profile_name, values = _load_openai_profile_values(profile, home=home, env_store=env_store)
+    store = token_store or TokenStore(home=home)
+    existing_values = _token_values(store.read(OPENAI_SERVICE_NAME, profile_name))
+    refresh_token = existing_values.get("refresh_token") or values.get("OPENAI_REFRESH_TOKEN")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        raise ValueError(f"OpenAI ChatEnv profile {profile_name} is missing OPENAI_REFRESH_TOKEN")
+
+    oauth_base_url = values.get("OPENAI_OAUTH_BASE_URL") or AUTH_BASE_URL
+    client_id, client_id_source = _configured_client_id(values)
+    refreshed = refresh_access_token(
+        refresh_token=refresh_token,
+        client_id=client_id,
+        oauth_base_url=oauth_base_url,
+        timeout=20.0,
+    )
+    if not refreshed.get("ok"):
+        raise ValueError(f"OpenAI OAuth refresh failed: status={refreshed.get('status')}")
+    refreshed_values = dict(refreshed.get("values") or {})
+    if "refresh_token" not in refreshed_values:
+        refreshed_values["refresh_token"] = refresh_token
+    return TokenRefreshResult(
+        values={key: value for key, value in refreshed_values.items() if value},
+        token_type=OPENAI_OAUTH_TOKEN_TYPE,
+        summary={
+            "provider": OPENAI_SERVICE_NAME,
+            "profile": profile_name,
+            "oauth_base_url_hash": _base_url_hash(oauth_base_url),
+            "client_id_source": client_id_source,
+            "access_token_present": bool(refreshed_values.get("access_token")),
+            "refresh_token_present": bool(refreshed_values.get("refresh_token")),
+            "refresh_token_rotated": bool(refreshed.get("refresh_token_rotated")),
+            "id_token_present": bool(refreshed_values.get("id_token")),
+        },
+        expires_at=refreshed.get("expires_at") or "",
+    )
+
+
+def refresh_openai_profile_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    """Refresh ``OpenAI`` runtime token state through ChatEnv."""
+
+    return refresh_runtime_token(OPENAI_SERVICE_NAME, profile, home=home)
+
+
+def read_stored_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    profile_name = normalize_token_profile(profile)
+    return _token_store(home).read(OPENAI_SERVICE_NAME, profile_name)
+
+
+def token_status(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    profile_name = normalize_token_profile(profile)
+    status = _token_store(home).status(OPENAI_SERVICE_NAME, profile_name)
+    status["token_type"] = read_stored_token(profile=profile_name, home=home).get("token_type", OPENAI_OAUTH_TOKEN_TYPE)
+    return status
+
+
+def save_token_values(
+    *,
+    profile: str = "default",
+    values: dict[str, Any],
+    expires_at: str | None = None,
+    source: str = "import",
+    home: str | Path | None = None,
+) -> dict[str, Any]:
+    """Compatibility helper that writes OpenAI tokens through TokenStore API.
+
+    New command-line workflows should prefer ``chatenv token import OpenAI`` or
+    ``chatenv token refresh OpenAI``. This function remains for Python callers
+    and tests; it never writes a Codex-specific service namespace.
+    """
+
+    profile_name = normalize_token_profile(profile)
+    summary = {
+        "provider": OPENAI_SERVICE_NAME,
+        "profile": profile_name,
+        "access_token_present": bool(values.get("access_token")),
+        "refresh_token_present": bool(values.get("refresh_token")),
+        "id_token_present": bool(values.get("id_token")),
+    }
+    return _token_store(home).write(
+        OPENAI_SERVICE_NAME,
+        profile_name,
+        values={key: value for key, value in values.items() if value},
+        token_type=OPENAI_OAUTH_TOKEN_TYPE,
+        summary=summary,
+        expires_at=expires_at or "",
+        source=source,
+    )
+
+
+def _stored_values(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    payload = read_stored_token(profile=profile, home=home)
+    return _token_values(payload)
+
+
+def _usable_access_from_payload(payload: dict[str, Any]) -> str:
+    if _is_expired(payload.get("expires_at")):
+        return ""
+    token = _token_values(payload).get("access_token")
+    return token if isinstance(token, str) and token else ""
+
+
+def _usable_access_from_openai_profile(*, profile: str, home: str | Path | None = None) -> str:
+    try:
+        _profile_name, values = _load_openai_profile_values(profile, home=home)
+    except ValueError:
+        return ""
+    if _is_expired(values.get("OPENAI_ACCESS_TOKEN_EXPIRES_AT")):
+        return ""
+    token = values.get("OPENAI_ACCESS_TOKEN")
+    return token if isinstance(token, str) and token else ""
+
+
+def _resolve_access_token(
+    *,
+    access_token: str | None,
+    profile: str,
+    refresh: bool,
+    client_id: str | None,
+    timeout: float,
+    home: str | Path | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    del client_id, timeout  # Refresh parameters are owned by the ChatEnv provider.
+    profile_name = normalize_token_profile(profile)
+    if access_token:
+        return access_token, None
+
+    payload = read_stored_token(profile=profile_name, home=home)
+    stored_access = _usable_access_from_payload(payload)
+    if stored_access:
+        return stored_access, None
+
+    configured_access = _usable_access_from_openai_profile(profile=profile_name, home=home)
+    if configured_access:
+        return configured_access, None
+
+    if refresh:
+        refresh_status = refresh_openai_profile_token(profile=profile_name, home=home)
+        refreshed_payload = read_stored_token(profile=profile_name, home=home)
+        refreshed_access = _usable_access_from_payload(refreshed_payload)
+        if refreshed_access:
+            return refreshed_access, refresh_status
+    raise ValueError(
+        "OpenAI access token is required; use a registered ChatEnv OpenAI profile and run "
+        "`chatenv token refresh OpenAI <profile>` or pass --access-token for a one-off read."
+    )
 
 
 def get_account(*, access_token: str, timeout: float = 20.0) -> dict[str, Any]:
@@ -244,88 +494,7 @@ def get_usage(
 
 
 def _normalize_profile(profile: str | None) -> str:
-    value = (profile or "default").strip()
-    return value or "default"
-
-
-def _token_store(home: str | Path | None = None) -> TokenStore:
-    return TokenStore(home=home)
-
-
-def read_stored_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
-    profile_name = _normalize_profile(profile)
-    return _token_store(home).read(CODEX_SERVICE_NAME, profile_name)
-
-
-def token_status(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
-    profile_name = _normalize_profile(profile)
-    status = _token_store(home).status(CODEX_SERVICE_NAME, profile_name)
-    status["token_type"] = read_stored_token(profile=profile_name, home=home).get("token_type", CODEX_TOKEN_TYPE)
-    return status
-
-
-def save_token_values(
-    *,
-    profile: str = "default",
-    values: dict[str, Any],
-    expires_at: str | None = None,
-    source: str = "refresh",
-    home: str | Path | None = None,
-) -> dict[str, Any]:
-    profile_name = _normalize_profile(profile)
-    summary = {
-        "access_token_present": bool(values.get("access_token")),
-        "refresh_token_present": bool(values.get("refresh_token")),
-        "id_token_present": bool(values.get("id_token")),
-    }
-    return _token_store(home).write(
-        CODEX_SERVICE_NAME,
-        profile_name,
-        values={key: value for key, value in values.items() if value},
-        token_type=CODEX_TOKEN_TYPE,
-        summary=summary,
-        expires_at=expires_at or "",
-        source=source,
-    )
-
-
-def _stored_values(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
-    payload = read_stored_token(profile=profile, home=home)
-    values = payload.get("values")
-    return values if isinstance(values, dict) else {}
-
-
-def _resolve_access_token(
-    *,
-    access_token: str | None,
-    profile: str,
-    refresh: bool,
-    client_id: str | None,
-    timeout: float,
-    home: str | Path | None = None,
-) -> tuple[str, dict[str, Any] | None]:
-    if access_token:
-        return access_token, None
-    values = _stored_values(profile=profile, home=home)
-    stored_access = values.get("access_token")
-    if isinstance(stored_access, str) and stored_access:
-        return stored_access, None
-    if refresh:
-        stored_refresh = values.get("refresh_token")
-        if isinstance(stored_refresh, str) and stored_refresh:
-            refreshed = refresh_access_token(refresh_token=stored_refresh, client_id=client_id, timeout=timeout)
-            if refreshed.get("ok"):
-                save_token_values(
-                    profile=profile,
-                    values=refreshed.get("values", {}),
-                    expires_at=refreshed.get("expires_at") or "",
-                    source="refresh",
-                    home=home,
-                )
-                token = refreshed.get("values", {}).get("access_token")
-                if isinstance(token, str) and token:
-                    return token, refreshed.get("safe") if isinstance(refreshed.get("safe"), dict) else refreshed
-    raise ValueError("OpenAI access token is required; pass --access-token, refresh, or store a Codex token profile")
+    return normalize_token_profile(profile)
 
 
 def inspect_account(
@@ -347,14 +516,50 @@ def inspect_account(
     )
     payload = get_account(access_token=token, timeout=timeout)
     payload["profile"] = _normalize_profile(profile)
+    payload["token_service"] = OPENAI_SERVICE_NAME
     payload["refresh"] = refresh_summary
     return payload
+
+
+def _account_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+    accounts = payload.get("accounts") if isinstance(payload, dict) else None
+    if not isinstance(accounts, list):
+        return []
+    ids: list[str] = []
+    for account in accounts:
+        if not isinstance(account, dict):
+            continue
+        for key in ("id", "account_id", "accountId"):
+            value = account.get(key)
+            if isinstance(value, str) and value and value not in ids:
+                ids.append(value)
+                break
+    return ids
+
+
+def _resolve_account_id_from_profile(*, access_token: str, timeout: float) -> tuple[str, dict[str, Any]]:
+    account_payload = get_account(access_token=access_token, timeout=timeout)
+    ids = _account_ids_from_payload(account_payload)
+    if len(ids) == 1:
+        return ids[0], {
+            "source": "profile_account_metadata",
+            "account_count": account_payload.get("account_count", len(ids)),
+            "status": account_payload.get("status"),
+        }
+    if not ids:
+        raise ValueError(
+            "No OpenAI account id was found for this profile; run `chatcrs codex account --profile <profile> --json-output` "
+            "or pass --account-id explicitly."
+        )
+    raise ValueError(
+        f"OpenAI profile exposes {len(ids)} account ids; pass --account-id explicitly to choose one."
+    )
 
 
 def inspect_usage(
     *,
     profile: str = "default",
-    account_id: str,
+    account_id: str | None = None,
     access_token: str | None = None,
     refresh: bool = True,
     client_id: str | None = None,
@@ -369,9 +574,14 @@ def inspect_usage(
         timeout=timeout,
         home=home,
     )
+    account_resolution: dict[str, Any] | None = None
+    if not account_id:
+        account_id, account_resolution = _resolve_account_id_from_profile(access_token=token, timeout=timeout)
     payload = get_usage(access_token=token, account_id=account_id, timeout=timeout)
     payload["profile"] = _normalize_profile(profile)
+    payload["token_service"] = OPENAI_SERVICE_NAME
     payload["refresh"] = refresh_summary
+    payload["account_resolution"] = account_resolution or {"source": "explicit"}
     return payload
 
 
@@ -384,6 +594,8 @@ __all__ = [
     "CODEX_USAGE_URL",
     "DEFAULT_OPENAI_CODEX_CLIENT_ID",
     "OAUTH_TOKEN_URL",
+    "OPENAI_OAUTH_TOKEN_TYPE",
+    "OPENAI_SERVICE_NAME",
     "WHAM_USAGE_URL",
     "extract_codex_rate_limit_headers",
     "get_account",
@@ -392,6 +604,8 @@ __all__ = [
     "inspect_usage",
     "read_stored_token",
     "refresh_access_token",
+    "refresh_chatenv_token",
+    "refresh_openai_profile_token",
     "save_token_values",
     "token_status",
 ]
