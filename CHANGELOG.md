@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.13
+
+### Fixed
+
+- Send Codex CLI-compatible headers for `chatcrs codex usage --profile <profile>` (`originator: codex_cli_rs`, canonical `ChatGPT-Account-ID`, JSON accept, and Codex CLI user-agent) so profile-only usage reads return the full upstream usage JSON instead of `403` HTML.
+
 ## 2026-08-12 - 0.2.12
 
 ### Fixed
