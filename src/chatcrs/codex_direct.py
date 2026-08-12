@@ -500,7 +500,10 @@ def get_usage(
         usage_url,
         headers={
             "authorization": f"Bearer {access_token}",
-            "chatgpt-account-id": account_id,
+            "ChatGPT-Account-ID": account_id,
+            "accept": "application/json",
+            "user-agent": "codex_cli_rs/0.0.0 (ChatCRS)",
+            "originator": "codex_cli_rs",
         },
         timeout=timeout,
     )

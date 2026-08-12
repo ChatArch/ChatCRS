@@ -58,7 +58,10 @@ class FakeCodexTransport:
             }
         if url == "https://chatgpt.com/backend-api/codex/usage":
             assert headers["authorization"] == "Bearer access-secret"
-            assert headers["chatgpt-account-id"] == "acct_123"
+            assert headers["ChatGPT-Account-ID"] == "acct_123"
+            assert headers["originator"] == "codex_cli_rs"
+            assert headers["user-agent"].startswith("codex_cli_rs/")
+            assert headers["accept"] == "application/json"
             return 200, {
                 "summary": {"tokens": 42},
                 "daily_usage_buckets": [{"start_date": "2026-08-12", "tokens": 42}],
