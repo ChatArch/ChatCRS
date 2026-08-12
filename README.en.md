@@ -63,7 +63,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv OpenAI token store.
 │   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
-│   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read a safe OpenAI Codex account summary from token claims and API probe.
 │   ├── quota [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--model <MODEL>] [--timeout <TIMEOUT>] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
@@ -118,7 +118,7 @@ chatcrs service restart --app-dir /path/to/crs --execute --json-output
 
 ## Configuration
 
-ChatCRS uses one CRS ChatEnv profile namespace. The default profile is `admin`; use `--profile` for another profile. Public docs describe field categories only and intentionally omit concrete secret-file paths or secret-bearing env key names.
+ChatCRS uses one CRS ChatEnv profile namespace for CRS Admin/API configuration and registers an `OpenAI` OAuth token refresher for Codex direct. Codex direct stable OAuth profiles live in `envs/OpenAI/<profile>.env`; runtime tokens live in `tokens/OpenAI/<profile>.json`; use `chatenv token refresh OpenAI <profile>` for durable refresh. OpenAI profiles may set non-secret relay fields: `OPENAI_OAUTH_BASE_URL` overrides the OAuth token/accounts upstream, and `CHATGPT_BACKEND_BASE_URL` overrides the ChatGPT backend upstream. Public docs describe field categories only and intentionally omit concrete secret-file paths or secret-bearing env key names.
 
 Canonical field categories:
 

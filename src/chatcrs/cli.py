@@ -579,10 +579,16 @@ def codex_token_refresh_command(
     """
 
     try:
+        profile_values = codex_direct._openai_profile_values_or_empty(profile=profile)
         if not refresh_token:
             values = codex_direct.read_stored_token(profile=profile).get("values", {})
             refresh_token = values.get("refresh_token") if isinstance(values, dict) else None
-        payload = codex_direct.refresh_access_token(refresh_token=refresh_token or "", client_id=client_id, timeout=timeout)
+        payload = codex_direct.refresh_access_token(
+            refresh_token=refresh_token or "",
+            client_id=client_id,
+            oauth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+            timeout=timeout,
+        )
         output = dict(payload.get("safe") or {"ok": payload.get("ok"), "status": payload.get("status")})
         output.update({"mutated": False, "profile": profile, "token_service": codex_direct.OPENAI_SERVICE_NAME})
         if payload.get("ok") and save_token:
@@ -612,7 +618,7 @@ def codex_token_refresh_command(
 @click.option("--timeout", type=float, default=20.0, show_default=True)
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_account_command(profile: str, access_token: str | None, refresh: bool, client_id: str | None, timeout: float, json_output: bool) -> None:
-    """Read OpenAI Codex account metadata directly from OpenAI."""
+    """Read a safe OpenAI Codex account summary from token claims and API probe."""
 
     try:
         payload = codex_direct.inspect_account(profile=profile, access_token=access_token, refresh=refresh, client_id=client_id, timeout=timeout)
@@ -621,7 +627,13 @@ def codex_account_command(profile: str, access_token: str | None, refresh: bool,
     if json_output:
         _echo_json(payload)
     else:
-        click.echo(f"ok={payload['ok']} status={payload['status']} accounts={payload['account_count']} profile={profile}")
+        summary = cast(dict[str, Any], payload.get("account_summary")) if isinstance(payload.get("account_summary"), dict) else {}
+        api = cast(dict[str, Any], payload.get("accounts_api")) if isinstance(payload.get("accounts_api"), dict) else {}
+        click.echo(
+            f"ok={payload['ok']} status={payload['status']} profile={profile} "
+            f"account_id_hash={summary.get('account_id_hash')} plan_type={summary.get('plan_type')} "
+            f"accounts_api_status={api.get('status')}"
+        )
 
 
 @codex_group.command(name="quota")
@@ -705,7 +717,7 @@ def codex_usage_command(
     else:
         rate_limits = payload.get("rate_limits") if isinstance(payload.get("rate_limits"), dict) else {}
         click.echo(
-            f"ok={payload['ok']} status={payload['status']} account_id={payload.get('account_id')} "
+            f"ok={payload['ok']} status={payload['status']} account_id_hash={payload.get('account_id_hash')} "
             f"primary_used_percent={rate_limits.get('primary_used_percent')}"
         )
 

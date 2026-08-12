@@ -83,7 +83,7 @@ EXPECTED_HTTP_INTERFACES = {
     "GET /openai/key-info",
     "POST https://auth.openai.com/oauth/token",
     "GET https://auth.openai.com/api/accounts",
-    "GET https://chatgpt.com/backend-api/codex/usage",
+    "GET https://chatgpt.com/backend-api/wham/usage",
     "POST https://chatgpt.com/backend-api/codex/responses",
 }
 

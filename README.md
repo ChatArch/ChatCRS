@@ -63,7 +63,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv OpenAI token store.
 │   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
-│   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read a safe OpenAI Codex account summary from token claims and API probe.
 │   ├── quota [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--model <MODEL>] [--timeout <TIMEOUT>] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
@@ -118,7 +118,7 @@ chatcrs service restart --app-dir /path/to/crs --execute --json-output
 
 ## 配置
 
-ChatCRS 使用 `CRS` ChatEnv profile 管理 CRS Admin/API 配置，并为 `OpenAI` 注册 OAuth token refresher 供 Codex direct 使用。Codex direct 的稳定 OAuth profile 来自 `envs/OpenAI/<profile>.env`，runtime token 来自 `tokens/OpenAI/<profile>.json`，持久刷新用 `chatenv token refresh OpenAI <profile>`。公开文档只描述字段类别，不写具体 secret 文件路径或 secret-bearing env key 名。
+ChatCRS 使用 `CRS` ChatEnv profile 管理 CRS Admin/API 配置，并为 `OpenAI` 注册 OAuth token refresher 供 Codex direct 使用。Codex direct 的稳定 OAuth profile 来自 `envs/OpenAI/<profile>.env`，runtime token 来自 `tokens/OpenAI/<profile>.json`，持久刷新用 `chatenv token refresh OpenAI <profile>`。OpenAI profile 可设置非敏感 relay 字段：`OPENAI_OAUTH_BASE_URL` 覆盖 OAuth token/accounts upstream，`CHATGPT_BACKEND_BASE_URL` 覆盖 ChatGPT backend upstream。公开文档只描述字段类别，不写具体 secret 文件路径或 secret-bearing env key 名。
 
 Canonical 字段类别：
 

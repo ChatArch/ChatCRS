@@ -9,7 +9,9 @@ refresh tokens, id tokens, cookies, or API keys.
 
 from __future__ import annotations
 
+import base64
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,6 +36,11 @@ DEFAULT_CODEX_QUOTA_MODEL = "gpt-5.5"
 OPENAI_SERVICE_NAME = "OpenAI"
 OPENAI_OAUTH_TOKEN_TYPE = "openai_oauth"
 OPENAI_CLIENT_ID_KEYS = ("OPENAI_OAUTH_CLIENT_ID", "OPENAI_CODEX_CLIENT_ID", "OPENAI_CLIENT_ID")
+CHATGPT_BACKEND_BASE_URL_KEYS = (
+    "CHATGPT_BACKEND_BASE_URL",
+    "OPENAI_CHATGPT_BACKEND_BASE_URL",
+    "OPENAI_CODEX_BACKEND_BASE_URL",
+)
 
 # Backward-compatible constants for callers that imported the 0.2.8 names. The
 # storage service is intentionally OpenAI, not Codex: Codex uses ChatEnv's shared
@@ -107,6 +114,22 @@ def _oauth_token_url(oauth_base_url: str | None = None) -> str:
     return f"{(oauth_base_url or AUTH_BASE_URL).rstrip('/')}/oauth/token"
 
 
+def _accounts_url(auth_base_url: str | None = None) -> str:
+    return f"{(auth_base_url or AUTH_BASE_URL).rstrip('/')}/api/accounts"
+
+
+def _chatgpt_backend_base_url(backend_base_url: str | None = None) -> str:
+    return (backend_base_url or CHATGPT_BACKEND_BASE_URL).rstrip("/")
+
+
+def _codex_usage_url(backend_base_url: str | None = None) -> str:
+    return f"{_chatgpt_backend_base_url(backend_base_url)}/wham/usage"
+
+
+def _codex_responses_url(backend_base_url: str | None = None) -> str:
+    return f"{_chatgpt_backend_base_url(backend_base_url)}/codex/responses"
+
+
 def _short_hash(value: str) -> str:
     import hashlib
 
@@ -115,6 +138,116 @@ def _short_hash(value: str) -> str:
 
 def _base_url_hash(base_url: str) -> str:
     return _short_hash(base_url.rstrip("/"))[:16]
+
+
+def _jwt_claims(token: str) -> dict[str, Any]:
+    if not isinstance(token, str) or token.count(".") != 2:
+        return {}
+    payload = token.split(".", 2)[1]
+    payload += "=" * ((4 - len(payload) % 4) % 4)
+    try:
+        parsed = json.loads(base64.urlsafe_b64decode(payload.encode("utf-8")).decode("utf-8"))
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _timestamp_to_iso(value: Any) -> str:
+    try:
+        seconds = int(float(value))
+    except (TypeError, ValueError):
+        return ""
+    return _iso(datetime.fromtimestamp(seconds, tz=timezone.utc))
+
+
+def _safe_hash_field(summary: dict[str, Any], name: str, value: Any) -> None:
+    if isinstance(value, str) and value:
+        summary[f"{name}_hash"] = _short_hash(value)
+        summary[f"{name}_present"] = True
+
+
+def _account_summary_from_token_claims(access_token: str, *, stored_account_id: str = "") -> dict[str, Any]:
+    claims = _jwt_claims(access_token)
+    auth_claim = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else None
+    if not isinstance(auth_claim, dict):
+        auth_claim = {}
+
+    summary: dict[str, Any] = {
+        "source": "access_token_claims",
+        "claims_present": bool(claims),
+        "auth_claim_present": bool(auth_claim),
+    }
+    account_id = auth_claim.get("chatgpt_account_id")
+    if isinstance(account_id, str) and account_id:
+        summary["account_id_hash"] = _short_hash(account_id)
+        summary["account_id_present"] = True
+    elif stored_account_id:
+        summary["account_id_hash"] = _short_hash(stored_account_id)
+        summary["account_id_present"] = True
+        summary["account_id_source"] = "token_store"
+    if stored_account_id:
+        summary["token_store_account_id_hash"] = _short_hash(stored_account_id)
+        if isinstance(account_id, str) and account_id:
+            summary["token_store_account_id_matches_claim"] = stored_account_id == account_id
+
+    plan_type = auth_claim.get("chatgpt_plan_type")
+    if isinstance(plan_type, str) and plan_type:
+        summary["plan_type"] = plan_type
+    _safe_hash_field(summary, "chatgpt_user_id", auth_claim.get("chatgpt_user_id") or auth_claim.get("user_id"))
+    _safe_hash_field(summary, "chatgpt_account_user_id", auth_claim.get("chatgpt_account_user_id"))
+    _safe_hash_field(summary, "poid", auth_claim.get("poid"))
+    expires_at = _timestamp_to_iso(claims.get("exp")) if isinstance(claims, dict) else ""
+    if expires_at:
+        summary["token_expires_at"] = expires_at
+        summary["token_expired"] = _is_expired(expires_at)
+    return summary
+
+
+def _safe_accounts(accounts: Any) -> list[dict[str, Any]]:
+    if not isinstance(accounts, list):
+        return []
+    safe: list[dict[str, Any]] = []
+    for account in accounts:
+        if not isinstance(account, dict):
+            continue
+        item: dict[str, Any] = {}
+        account_id = account.get("id") or account.get("account_id") or account.get("accountId")
+        if isinstance(account_id, str) and account_id:
+            item["account_id_hash"] = _short_hash(account_id)
+        for key in ("plan_type", "plan", "role", "name"):
+            value = account.get(key)
+            if isinstance(value, (str, int, float, bool)) and value != "":
+                item[key] = value
+        email = account.get("email")
+        if isinstance(email, str) and email:
+            item["email_hash"] = _short_hash(email.lower())
+        safe.append(item)
+    return safe
+
+
+def _extract_accounts(parsed: Any) -> list[dict[str, Any]]:
+    if not isinstance(parsed, dict):
+        return []
+    raw_accounts = parsed.get("accounts", parsed.get("data", parsed.get("items", [])))
+    if not isinstance(raw_accounts, list):
+        return []
+    return [account for account in raw_accounts if isinstance(account, dict)]
+
+
+def _fetch_accounts(
+    *,
+    access_token: str,
+    timeout: float = 20.0,
+    auth_base_url: str | None = None,
+) -> tuple[str, int, Any, list[dict[str, Any]]]:
+    accounts_url = _accounts_url(auth_base_url)
+    status, parsed, _headers = _request_json(
+        "GET",
+        accounts_url,
+        headers={"authorization": f"Bearer {access_token}"},
+        timeout=timeout,
+    )
+    return accounts_url, status, parsed, _extract_accounts(parsed)
 
 
 def extract_codex_rate_limit_headers(headers: dict[str, Any] | None) -> dict[str, float | None]:
@@ -181,6 +314,53 @@ def _token_values(payload: dict[str, Any]) -> dict[str, Any]:
     return values if isinstance(values, dict) else {}
 
 
+_IDENTITY_KEY_NAMES = {
+    "accountid",
+    "accountuuid",
+    "chatgptaccountid",
+    "userid",
+    "useruuid",
+    "chatgptuserid",
+    "chatgptaccountuserid",
+    "email",
+    "emailaddress",
+}
+
+
+def _redact_identity_text(value: str) -> str:
+    value = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[REDACTED]", value)
+    value = re.sub(r"\bacct_[A-Za-z0-9_-]+\b", "[REDACTED]", value)
+    value = re.sub(r"\buser_[A-Za-z0-9_-]+\b", "[REDACTED]", value)
+    value = re.sub(
+        r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        "[REDACTED]",
+        value,
+    )
+    return value
+
+
+def _identity_key_name(key: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(key).lower())
+
+
+def _redact_identity(value: Any) -> Any:
+    """Redact tokens plus account/user/email identity fields from public payloads."""
+
+    value = redact(value)
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if _identity_key_name(key) in _IDENTITY_KEY_NAMES else _redact_identity(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_identity(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_identity(item) for item in value)
+    if isinstance(value, str):
+        return _redact_identity_text(value)
+    return value
+
+
 def _load_openai_profile_values(
     profile: str | None,
     *,
@@ -218,6 +398,23 @@ def _configured_client_id(values: dict[str, str], client_id: str | None = None) 
         if value:
             return value, key
     return DEFAULT_OPENAI_CODEX_CLIENT_ID, "default_codex_client_id"
+
+
+def _configured_backend_base_url(values: dict[str, str] | None = None) -> str:
+    values = values or {}
+    for key in CHATGPT_BACKEND_BASE_URL_KEYS:
+        value = values.get(key)
+        if value:
+            return value.rstrip("/")
+    return CHATGPT_BACKEND_BASE_URL
+
+
+def _openai_profile_values_or_empty(*, profile: str, home: str | Path | None = None) -> dict[str, str]:
+    try:
+        _profile_name, values = _load_openai_profile_values(profile, home=home)
+    except ValueError:
+        return {}
+    return values
 
 
 def refresh_access_token(
@@ -457,28 +654,41 @@ def _resolve_access_token(
     )
 
 
-def get_account(*, access_token: str, timeout: float = 20.0) -> dict[str, Any]:
-    """Read ChatGPT/Codex account metadata using an access token."""
+def get_account(
+    *,
+    access_token: str,
+    timeout: float = 20.0,
+    auth_base_url: str | None = None,
+    stored_account_id: str = "",
+) -> dict[str, Any]:
+    """Read safe ChatGPT/Codex account metadata using an access token.
+
+    The token itself carries useful account claims. The accounts API is kept as
+    a best-effort probe because it is frequently protected by Cloudflare and may
+    return HTML challenge bodies even for otherwise usable Codex tokens.
+    """
 
     if not access_token:
         raise ValueError("OpenAI access token is required")
-    status, parsed, _headers = _request_json(
-        "GET",
-        ACCOUNTS_URL,
-        headers={"authorization": f"Bearer {access_token}"},
-        timeout=timeout,
-    )
-    accounts: Any = []
-    if isinstance(parsed, dict):
-        raw_accounts = parsed.get("accounts", parsed.get("data", parsed.get("items", [])))
-        accounts = raw_accounts if isinstance(raw_accounts, list) else []
+    accounts_url, status, parsed, accounts = _fetch_accounts(access_token=access_token, timeout=timeout, auth_base_url=auth_base_url)
+    account_summary = _account_summary_from_token_claims(access_token, stored_account_id=stored_account_id)
+    safe_accounts = _safe_accounts(accounts)
+    api_ok = status == 200 and bool(safe_accounts)
     return {
-        "ok": status == 200,
+        "ok": bool(account_summary.get("account_id_present") or api_ok),
         "mutated": False,
         "status": status,
-        "account_count": len(accounts),
-        "accounts": redact(accounts),
-        "body": redact(parsed) if not accounts else None,
+        "accounts_url": accounts_url,
+        "account_count": len(safe_accounts),
+        "account_summary": account_summary,
+        "accounts": safe_accounts,
+        "accounts_api": {
+            "ok": api_ok,
+            "status": status,
+            "account_count": len(safe_accounts),
+            "body_redacted": _redact_identity(parsed) if status == 200 and not safe_accounts else None,
+            "body_kind": "html" if isinstance(parsed, dict) and str(parsed.get("raw", "")).lstrip().startswith("<") else type(parsed).__name__,
+        },
     }
 
 
@@ -487,7 +697,8 @@ def get_usage(
     access_token: str,
     account_id: str,
     timeout: float = 20.0,
-    usage_url: str = CODEX_USAGE_URL,
+    usage_url: str | None = None,
+    backend_base_url: str | None = None,
 ) -> dict[str, Any]:
     """Read Codex token usage and quota headers for one ChatGPT account."""
 
@@ -495,9 +706,10 @@ def get_usage(
         raise ValueError("OpenAI access token is required")
     if not account_id:
         raise ValueError("ChatGPT account id is required")
+    resolved_usage_url = usage_url or _codex_usage_url(backend_base_url)
     status, parsed, headers = _request_json(
         "GET",
-        usage_url,
+        resolved_usage_url,
         headers={
             "authorization": f"Bearer {access_token}",
             "ChatGPT-Account-ID": account_id,
@@ -511,10 +723,10 @@ def get_usage(
         "ok": status == 200,
         "mutated": False,
         "status": status,
-        "account_id": account_id,
-        "usage_url": usage_url,
+        "account_id_hash": _short_hash(account_id),
+        "usage_url": resolved_usage_url,
         "rate_limits": extract_codex_rate_limit_headers(headers),
-        "usage": redact(parsed),
+        "usage": _redact_identity(parsed),
     }
 
 
@@ -545,7 +757,8 @@ def get_quota(
     model: str = DEFAULT_CODEX_QUOTA_MODEL,
     prompt: str = "Reply OK.",
     timeout: float = 20.0,
-    responses_url: str = CODEX_RESPONSES_URL,
+    responses_url: str | None = None,
+    backend_base_url: str | None = None,
 ) -> dict[str, Any]:
     """Run a minimal Codex responses smoke and return only safe quota headers."""
 
@@ -554,9 +767,10 @@ def get_quota(
     if not account_id:
         raise ValueError("ChatGPT account id is required")
     payload = _codex_quota_smoke_payload(model=model, prompt=prompt)
+    resolved_responses_url = responses_url or _codex_responses_url(backend_base_url)
     status, parsed, headers = _request_json(
         "POST",
-        responses_url,
+        resolved_responses_url,
         json_data=payload,
         headers={
             "authorization": f"Bearer {access_token}",
@@ -574,12 +788,12 @@ def get_quota(
         "mutated": False,
         "status": status,
         "account_id_hash": _short_hash(account_id),
-        "responses_url": responses_url,
+        "responses_url": resolved_responses_url,
         "model": model,
         "request": {"store": payload["store"], "stream": payload["stream"]},
         "rate_limits": rate_limits,
         "has_quota_headers": any(value is not None for value in rate_limits.values()),
-        "body": redact(parsed) if status != 200 else None,
+        "body": _redact_identity(parsed) if status != 200 else None,
     }
 
 
@@ -596,16 +810,24 @@ def inspect_account(
     timeout: float = 20.0,
     home: str | Path | None = None,
 ) -> dict[str, Any]:
+    profile_name = _normalize_profile(profile)
+    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
-        profile=profile,
+        profile=profile_name,
         refresh=refresh,
         client_id=client_id,
         timeout=timeout,
         home=home,
     )
-    payload = get_account(access_token=token, timeout=timeout)
-    payload["profile"] = _normalize_profile(profile)
+    stored_account_id = _stored_account_id(profile=profile_name, home=home)
+    payload = get_account(
+        access_token=token,
+        timeout=timeout,
+        auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+        stored_account_id=stored_account_id,
+    )
+    payload["profile"] = profile_name
     payload["token_service"] = OPENAI_SERVICE_NAME
     payload["refresh"] = refresh_summary
     return payload
@@ -633,20 +855,32 @@ def _stored_account_id(*, profile: str, home: str | Path | None = None) -> str:
     return account_id if isinstance(account_id, str) and account_id else ""
 
 
-def _resolve_account_id_from_profile(*, profile: str, access_token: str, timeout: float, home: str | Path | None = None) -> tuple[str, dict[str, Any]]:
+def _resolve_account_id_from_profile(
+    *,
+    profile: str,
+    access_token: str,
+    timeout: float,
+    home: str | Path | None = None,
+    auth_base_url: str | None = None,
+) -> tuple[str, dict[str, Any]]:
     stored_account_id = _stored_account_id(profile=profile, home=home)
     if stored_account_id:
         return stored_account_id, {
             "source": "token_store_account_id",
             "account_id_hash": _short_hash(stored_account_id),
         }
-    account_payload = get_account(access_token=access_token, timeout=timeout)
-    ids = _account_ids_from_payload(account_payload)
+    _accounts_url_value, status, _parsed, accounts = _fetch_accounts(
+        access_token=access_token,
+        timeout=timeout,
+        auth_base_url=auth_base_url,
+    )
+    ids = _account_ids_from_payload({"accounts": accounts})
     if len(ids) == 1:
         return ids[0], {
             "source": "profile_account_metadata",
-            "account_count": account_payload.get("account_count", len(ids)),
-            "status": account_payload.get("status"),
+            "account_count": len(ids),
+            "status": status,
+            "account_id_hash": _short_hash(ids[0]),
         }
     if not ids:
         raise ValueError(
@@ -668,9 +902,11 @@ def inspect_usage(
     timeout: float = 20.0,
     home: str | Path | None = None,
 ) -> dict[str, Any]:
+    profile_name = _normalize_profile(profile)
+    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
-        profile=profile,
+        profile=profile_name,
         refresh=refresh,
         client_id=client_id,
         timeout=timeout,
@@ -678,12 +914,23 @@ def inspect_usage(
     )
     account_resolution: dict[str, Any] | None = None
     if not account_id:
-        account_id, account_resolution = _resolve_account_id_from_profile(profile=profile, access_token=token, timeout=timeout, home=home)
-    payload = get_usage(access_token=token, account_id=account_id, timeout=timeout)
-    payload["profile"] = _normalize_profile(profile)
+        account_id, account_resolution = _resolve_account_id_from_profile(
+            profile=profile_name,
+            access_token=token,
+            timeout=timeout,
+            home=home,
+            auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+        )
+    payload = get_usage(
+        access_token=token,
+        account_id=account_id,
+        timeout=timeout,
+        backend_base_url=_configured_backend_base_url(profile_values),
+    )
+    payload["profile"] = profile_name
     payload["token_service"] = OPENAI_SERVICE_NAME
     payload["refresh"] = refresh_summary
-    payload["account_resolution"] = account_resolution or {"source": "explicit"}
+    payload["account_resolution"] = account_resolution or {"source": "explicit", "account_id_hash": _short_hash(account_id)}
     return payload
 
 
@@ -700,9 +947,11 @@ def inspect_quota(
 ) -> dict[str, Any]:
     """Run a profile-only Codex quota smoke through the responses endpoint."""
 
+    profile_name = _normalize_profile(profile)
+    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
-        profile=profile,
+        profile=profile_name,
         refresh=refresh,
         client_id=client_id,
         timeout=timeout,
@@ -710,9 +959,21 @@ def inspect_quota(
     )
     account_resolution: dict[str, Any] | None = None
     if not account_id:
-        account_id, account_resolution = _resolve_account_id_from_profile(profile=profile, access_token=token, timeout=timeout, home=home)
-    payload = get_quota(access_token=token, account_id=account_id, model=model, timeout=timeout)
-    payload["profile"] = _normalize_profile(profile)
+        account_id, account_resolution = _resolve_account_id_from_profile(
+            profile=profile_name,
+            access_token=token,
+            timeout=timeout,
+            home=home,
+            auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+        )
+    payload = get_quota(
+        access_token=token,
+        account_id=account_id,
+        model=model,
+        timeout=timeout,
+        backend_base_url=_configured_backend_base_url(profile_values),
+    )
+    payload["profile"] = profile_name
     payload["token_service"] = OPENAI_SERVICE_NAME
     payload["refresh"] = refresh_summary
     payload["account_resolution"] = account_resolution or {"source": "explicit", "account_id_hash": _short_hash(account_id)}
