@@ -86,7 +86,7 @@ def test_service_execute_runs_locally_and_redacts_sensitive_output(tmp_path):
 
     class FakeCompleted:
         returncode = 0
-        stdout = "ok Authorization: Bearer secret-token cr_live_SECRET_VALUE"
+        stdout = "ok Authorization: Bearer fixturebearer1234567890"
         stderr = ""
 
     def fake_runner(argv: list[str], *, cwd: Path, timeout: float):
@@ -101,7 +101,7 @@ def test_service_execute_runs_locally_and_redacts_sensitive_output(tmp_path):
     assert payload["mode"] == "execute"
     assert payload["mutated"] is True
     assert "secret-token" not in payload["stdout"]
-    assert "cr_live_SECRET_VALUE" not in payload["stdout"]
+    assert "fixturebearer1234567890" not in payload["stdout"]
     assert "[REDACTED]" in payload["stdout"]
 
 

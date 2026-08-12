@@ -21,6 +21,12 @@ chatcrs
 │       └── show                   # GET /admin/api-keys + batch stats/last usage, filtered by id/name
 ├── key                            # API-key-only self inspection
 │   └── info                       # GET /openai/key-info
+├── codex                          # Direct OpenAI Codex OAuth/backend helpers
+│   ├── token
+│   │   ├── status                 # local Codex token file metadata, no token output
+│   │   └── refresh                # POST https://auth.openai.com/oauth/token
+│   ├── account                    # GET https://auth.openai.com/api/accounts
+│   └── usage                      # GET https://chatgpt.com/backend-api/codex/usage
 └── service                        # server-local service lifecycle
     ├── install                    # local crs install; dry-run by default
     ├── update                     # local crs update; dry-run by default
@@ -46,6 +52,10 @@ chatcrs
 | `chatcrs admin keys list` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_keys` |
 | `chatcrs admin keys show` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_key_detail` |
 | `chatcrs key info` | `GET /openai/key-info` | caller CRS API key from profile or `--api-key` | No | `CrsHttpClient.key_info` |
+| `chatcrs codex token status` | local `tokens/Codex/<profile>.json` metadata | Codex token profile | No | `chatcrs.codex_direct.token_status` |
+| `chatcrs codex token refresh` | `POST https://auth.openai.com/oauth/token` | OpenAI refresh token from explicit option or Codex token profile | No durable mutation by default; `--save-token` writes only the Codex token profile | `chatcrs.codex_direct.refresh_access_token` / `chatcrs.codex_direct.save_token_values` |
+| `chatcrs codex account` | `GET https://auth.openai.com/api/accounts` | OpenAI access token from option or Codex token profile; optional refresh | No | `chatcrs.codex_direct.inspect_account` |
+| `chatcrs codex usage` | `GET https://chatgpt.com/backend-api/codex/usage` with `chatgpt-account-id` | OpenAI access token from option or Codex token profile; optional refresh | No | `chatcrs.codex_direct.inspect_usage` |
 | `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service start` | local `crs start` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
@@ -65,6 +75,7 @@ chatcrs
 | admin password profile field | Admin password | `chatcrs admin login` and admin commands that need a login-derived token |
 | admin bearer/session token profile field | Legacy Admin bearer token fallback | `chatcrs admin ...` |
 | runtime token file | Cached login-derived Admin session token | `chatcrs admin token ...` and Admin auto-refresh |
+| Codex token profile | Cached OpenAI Codex access/refresh token values | `chatcrs codex ...`; output is redacted and raw token values are not printed |
 | `--app-dir` | Local CRS app directory on the current server | `chatcrs service ...` |
 | `--crs-command` | Local CRS executable or command name | `chatcrs service ...` |
 
@@ -89,6 +100,7 @@ The canonical ChatEnv namespace is `CRS`; stable configuration lives in Env, whi
 - `POST /admin/api-keys/batch-stats`
 - `POST /admin/api-keys/batch-last-usage`
 - `GET /openai/key-info`
+- OpenAI/Codex direct APIs used by `chatcrs codex ...`: `POST https://auth.openai.com/oauth/token`, `GET https://auth.openai.com/api/accounts`, and `GET https://chatgpt.com/backend-api/codex/usage`.
 
 ## Explicit gaps / out-of-scope task surfaces
 

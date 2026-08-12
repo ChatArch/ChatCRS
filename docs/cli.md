@@ -24,6 +24,12 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │       └── show <KEY-ID> [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--username <USERNAME>] [--password <PASSWORD>] [--admin-token <ADMIN-TOKEN>] [--timeout <TIMEOUT>] [--include-stats/--no-include-stats] [--time-range <TIME-RANGE>] [--json-output]  # Show one CRS API key by id or name.
 ├── key  # CRS API-key-only operations that do not require admin login.
 │   └── info [--profile <PROFILE>] [--base-url <BASE-URL>] [--api-key <API-KEY>] [--timeout <TIMEOUT>] [--path <INFO-PATH>] [--json-output]  # Query CRS key-info using only a CRS API key.
+├── codex  # Direct OpenAI Codex account token and usage helpers.
+│   ├── token  # Manage cached OpenAI Codex OAuth tokens in the ChatArch token store.
+│   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached Codex OAuth token metadata without printing tokens.
+│   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--save-token] [--json-output]  # Refresh an OpenAI Codex access token without printing token values.
+│   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
     ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
     ├── update [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs update` on this server.
@@ -46,6 +52,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | 账号状态 reset | `chatcrs admin accounts refresh-status` | 默认 dry-run；`--execute` 才调用 CRS reset-status；不是 OAuth refresh-token 强刷 |
 | API key 统计 | `chatcrs admin keys list`, `chatcrs admin keys show` | key 值脱敏，返回状态、限制、统计和 last-usage 摘要 |
 | 普通 API key 自查 | `chatcrs key info` | 不需要管理员登录 |
+| Codex direct token/account/usage | `chatcrs codex token ...`, `chatcrs codex account`, `chatcrs codex usage` | 直接调用 OpenAI/Codex OAuth 与 backend API；输出只包含脱敏 token 状态、account 摘要、usage/quota header 摘要 |
 | 本机 service lifecycle | `chatcrs service ...` | 只在 CRS 服务器本机执行本机 `crs` 命令；外部管理必须走 HTTP/Admin API 或新增服务端 API/agent |
 
 ## 注册命令清单
@@ -62,6 +69,10 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 | `chatcrs admin keys list` | API key list and statistics |
 | `chatcrs admin keys show` | Single API key summary |
 | `chatcrs key info` | API-key-only self check |
+| `chatcrs codex token status` | Cached OpenAI Codex OAuth token metadata |
+| `chatcrs codex token refresh` | Refresh and optionally save a Codex access token |
+| `chatcrs codex account` | Direct OpenAI Codex account metadata inspection |
+| `chatcrs codex usage` | Direct Codex usage and quota inspection |
 | `chatcrs service install` | Local CRS install command plan/execute |
 | `chatcrs service update` | Local CRS update command plan/execute |
 | `chatcrs service start` | Local CRS start command plan/execute |
@@ -96,6 +107,18 @@ chatcrs admin keys show <key_id_or_name> --profile admin --json-output
 chatcrs key info --profile admin --json-output
 chatcrs key info --profile admin --path /openai/key-info --json-output
 ```
+
+## Codex direct { #codex-direct }
+
+```bash
+chatcrs codex token status --profile default --json-output
+chatcrs codex token refresh --profile default --json-output
+chatcrs codex token refresh --profile default --save-token --json-output
+chatcrs codex account --profile default --json-output
+chatcrs codex usage --profile default --account-id <account_id> --json-output
+```
+
+`codex` 分支直接调用 OpenAI/Codex OAuth 与 backend API，不经过 CRS Admin API。它可以从 `tokens/Codex/<profile>.json` 读取已保存 token；命令输出只报告 token 是否存在、account 摘要和 usage/quota header 摘要，不打印 access token、refresh token 或 id token。
 
 ## Server-local service { #server-local-service }
 
