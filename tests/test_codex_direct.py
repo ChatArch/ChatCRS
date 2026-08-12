@@ -15,8 +15,8 @@ class FakeCodexTransport:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, method, url, *, data=None, headers=None, timeout=20.0):
-        self.calls.append({"method": method, "url": url, "data": data, "headers": headers or {}, "timeout": timeout})
+    def __call__(self, method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        self.calls.append({"method": method, "url": url, "data": data, "json_data": json_data, "headers": headers or {}, "timeout": timeout})
         if url == "https://auth.openai.com/oauth/token":
             assert method == "POST"
             assert data["grant_type"] == "refresh_token"
@@ -39,6 +39,20 @@ class FakeCodexTransport:
                     }
                 ]
             }, {}
+        if url == "https://chatgpt.com/backend-api/codex/responses":
+            assert method == "POST"
+            assert headers["authorization"] == "Bearer access-secret"
+            assert headers["chatgpt-account-id"] == "acct_123"
+            assert isinstance(json_data, dict)
+            assert json_data["store"] is False
+            assert json_data["stream"] is True
+            assert "max_output_tokens" not in json_data
+            return 200, None, {
+                "x-codex-primary-used-percent": "12.5",
+                "x-codex-primary-reset-after-seconds": "1800",
+                "x-codex-primary-window-minutes": "300",
+                "x-codex-secondary-used-percent": "3",
+            }
         if url == "https://chatgpt.com/backend-api/codex/usage":
             assert headers["authorization"] == "Bearer access-secret"
             assert headers["chatgpt-account-id"] == "acct_123"
@@ -198,6 +212,36 @@ def test_codex_usage_can_use_token_store_account_id_without_accounts_api(monkeyp
     assert called_urls == ["https://chatgpt.com/backend-api/codex/usage"]
 
 
+def test_codex_quota_uses_responses_smoke_and_redacts_account_id(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    TokenStore(home=home).write(
+        "OpenAI",
+        "wzh",
+        values={"access_token": "access-secret", "account_id": "acct_123"},
+        token_type="openai_oauth",
+        summary={"access_token_present": True, "account_id_present": True},
+    )
+    transport = FakeCodexTransport()
+    monkeypatch.setattr(codex_direct, "_request_json", transport)
+
+    payload = codex_direct.inspect_quota(profile="wzh", home=home, refresh=False)
+
+    assert payload["ok"] is True
+    assert payload["status"] == 200
+    assert payload["profile"] == "wzh"
+    assert payload["token_service"] == "OpenAI"
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert payload["account_resolution"]["source"] == "token_store_account_id"
+    assert payload["request"] == {"store": False, "stream": True}
+    assert payload["has_quota_headers"] is True
+    assert payload["rate_limits"]["primary_used_percent"] == 12.5
+    assert "account_id" not in payload
+    assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
+    assert transport.calls[-1]["url"] == "https://chatgpt.com/backend-api/codex/responses"
+
+
 def test_codex_usage_can_resolve_unique_account_from_profile(monkeypatch, tmp_path: Path):
     from chatcrs import codex_direct
 
@@ -296,8 +340,61 @@ def test_codex_cli_surface_is_registered():
     assert "codex  # Direct OpenAI Codex account token and usage helpers." in result.output
     assert "refresh [--profile <PROFILE>]" in result.output
     assert "account [--profile <PROFILE>]" in result.output
+    assert "quota [--profile <PROFILE>]" in result.output
     assert "usage [--profile <PROFILE>]" in result.output
     assert "tokens/Codex" not in result.output
+
+
+def test_codex_cli_quota_calls_python_api_without_leaking_account_id(monkeypatch):
+    from chatcrs import cli
+
+    called = {}
+
+    def fake_quota(*, profile, account_id, access_token, refresh, client_id, model, timeout):
+        called.update(
+            {
+                "profile": profile,
+                "account_id": account_id,
+                "access_token": access_token,
+                "refresh": refresh,
+                "client_id": client_id,
+                "model": model,
+                "timeout": timeout,
+            }
+        )
+        return {
+            "ok": True,
+            "mutated": False,
+            "status": 200,
+            "profile": profile,
+            "account_id_hash": "182d1cfdc619",
+            "token_service": "OpenAI",
+            "account_resolution": {"source": "token_store_account_id", "account_id_hash": "182d1cfdc619"},
+            "rate_limits": {"primary_used_percent": 12.5, "primary_reset_after_seconds": 1800.0},
+            "has_quota_headers": True,
+        }
+
+    monkeypatch.setattr(cli.codex_direct, "inspect_quota", fake_quota)
+
+    result = CliRunner().invoke(
+        main,
+        ["codex", "quota", "--profile", "wzh", "--json-output"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert payload["account_resolution"]["source"] == "token_store_account_id"
+    assert "acct_123" not in result.output
+    assert called == {
+        "profile": "wzh",
+        "account_id": None,
+        "access_token": None,
+        "refresh": True,
+        "client_id": None,
+        "model": "gpt-5",
+        "timeout": 20.0,
+    }
 
 
 def test_codex_cli_usage_allows_profile_only_when_account_can_be_resolved(monkeypatch):

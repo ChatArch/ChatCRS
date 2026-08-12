@@ -27,8 +27,10 @@ AUTH_BASE_URL = "https://auth.openai.com"
 CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api"
 ACCOUNTS_URL = f"{AUTH_BASE_URL}/api/accounts"
 CODEX_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/usage"
+CODEX_RESPONSES_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/responses"
 WHAM_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/wham/usage"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+DEFAULT_CODEX_QUOTA_MODEL = "gpt-5"
 OPENAI_SERVICE_NAME = "OpenAI"
 OPENAI_OAUTH_TOKEN_TYPE = "openai_oauth"
 OPENAI_CLIENT_ID_KEYS = ("OPENAI_OAUTH_CLIENT_ID", "OPENAI_CODEX_CLIENT_ID", "OPENAI_CLIENT_ID")
@@ -135,6 +137,7 @@ def _request_json(
     url: str,
     *,
     data: dict[str, Any] | None = None,
+    json_data: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     timeout: float = 20.0,
 ) -> tuple[int, Any, dict[str, str]]:
@@ -144,7 +147,12 @@ def _request_json(
     if headers:
         request_headers.update(headers)
     body = None
-    if data is not None:
+    if data is not None and json_data is not None:
+        raise ValueError("Pass either form data or JSON data, not both")
+    if json_data is not None:
+        body = json.dumps(json_data).encode("utf-8")
+        request_headers["content-type"] = "application/json"
+    elif data is not None:
         body = urllib.parse.urlencode({key: str(value) for key, value in data.items()}).encode("utf-8")
         request_headers["content-type"] = "application/x-www-form-urlencoded"
     request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
@@ -507,6 +515,69 @@ def get_usage(
     }
 
 
+def _codex_quota_smoke_payload(*, model: str = DEFAULT_CODEX_QUOTA_MODEL, prompt: str = "Reply OK.") -> dict[str, Any]:
+    return {
+        "model": model,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": prompt,
+                    }
+                ],
+            }
+        ],
+        "store": False,
+        "stream": True,
+    }
+
+
+def get_quota(
+    *,
+    access_token: str,
+    account_id: str,
+    model: str = DEFAULT_CODEX_QUOTA_MODEL,
+    prompt: str = "Reply OK.",
+    timeout: float = 20.0,
+    responses_url: str = CODEX_RESPONSES_URL,
+) -> dict[str, Any]:
+    """Run a minimal Codex responses smoke and return only safe quota headers."""
+
+    if not access_token:
+        raise ValueError("OpenAI access token is required")
+    if not account_id:
+        raise ValueError("ChatGPT account id is required")
+    payload = _codex_quota_smoke_payload(model=model, prompt=prompt)
+    status, parsed, headers = _request_json(
+        "POST",
+        responses_url,
+        json_data=payload,
+        headers={
+            "authorization": f"Bearer {access_token}",
+            "chatgpt-account-id": account_id,
+            "host": "chatgpt.com",
+            "accept": "text/event-stream",
+            "user-agent": "codex_cli_rs/0.0.0",
+        },
+        timeout=timeout,
+    )
+    rate_limits = extract_codex_rate_limit_headers(headers)
+    return {
+        "ok": status == 200,
+        "mutated": False,
+        "status": status,
+        "account_id_hash": _short_hash(account_id),
+        "responses_url": responses_url,
+        "model": model,
+        "request": {"store": payload["store"], "stream": payload["stream"]},
+        "rate_limits": rate_limits,
+        "has_quota_headers": any(value is not None for value in rate_limits.values()),
+        "body": redact(parsed) if status != 200 else None,
+    }
+
+
 def _normalize_profile(profile: str | None) -> str:
     return normalize_token_profile(profile)
 
@@ -611,13 +682,47 @@ def inspect_usage(
     return payload
 
 
+def inspect_quota(
+    *,
+    profile: str = "default",
+    account_id: str | None = None,
+    access_token: str | None = None,
+    refresh: bool = True,
+    client_id: str | None = None,
+    model: str = DEFAULT_CODEX_QUOTA_MODEL,
+    timeout: float = 20.0,
+    home: str | Path | None = None,
+) -> dict[str, Any]:
+    """Run a profile-only Codex quota smoke through the responses endpoint."""
+
+    token, refresh_summary = _resolve_access_token(
+        access_token=access_token,
+        profile=profile,
+        refresh=refresh,
+        client_id=client_id,
+        timeout=timeout,
+        home=home,
+    )
+    account_resolution: dict[str, Any] | None = None
+    if not account_id:
+        account_id, account_resolution = _resolve_account_id_from_profile(profile=profile, access_token=token, timeout=timeout, home=home)
+    payload = get_quota(access_token=token, account_id=account_id, model=model, timeout=timeout)
+    payload["profile"] = _normalize_profile(profile)
+    payload["token_service"] = OPENAI_SERVICE_NAME
+    payload["refresh"] = refresh_summary
+    payload["account_resolution"] = account_resolution or {"source": "explicit", "account_id_hash": _short_hash(account_id)}
+    return payload
+
+
 __all__ = [
     "ACCOUNTS_URL",
     "AUTH_BASE_URL",
     "CHATGPT_BACKEND_BASE_URL",
     "CODEX_SERVICE_NAME",
     "CODEX_TOKEN_TYPE",
+    "CODEX_RESPONSES_URL",
     "CODEX_USAGE_URL",
+    "DEFAULT_CODEX_QUOTA_MODEL",
     "DEFAULT_OPENAI_CODEX_CLIENT_ID",
     "OAUTH_TOKEN_URL",
     "OPENAI_OAUTH_TOKEN_TYPE",
@@ -625,8 +730,10 @@ __all__ = [
     "WHAM_USAGE_URL",
     "extract_codex_rate_limit_headers",
     "get_account",
+    "get_quota",
     "get_usage",
     "inspect_account",
+    "inspect_quota",
     "inspect_usage",
     "read_stored_token",
     "refresh_access_token",

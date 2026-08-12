@@ -18,6 +18,7 @@ EXPECTED_CLI_LEAVES = {
     "chatcrs codex token status",
     "chatcrs codex token refresh",
     "chatcrs codex account",
+    "chatcrs codex quota",
     "chatcrs codex usage",
     "chatcrs service install",
     "chatcrs service update",
@@ -83,6 +84,7 @@ EXPECTED_HTTP_INTERFACES = {
     "POST https://auth.openai.com/oauth/token",
     "GET https://auth.openai.com/api/accounts",
     "GET https://chatgpt.com/backend-api/codex/usage",
+    "POST https://chatgpt.com/backend-api/codex/responses",
 }
 
 FORBIDDEN_PUBLIC_DOC_FRAGMENTS = (

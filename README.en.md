@@ -64,6 +64,7 @@ chatcrs  # CRS HTTP/API helpers plus server-local service commands for ChatArch.
 │   │   ├── status [--profile <PROFILE>] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   │   └── refresh [--profile <PROFILE>] [--refresh-token <REFRESH-TOKEN>] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   ├── account [--profile <PROFILE>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read OpenAI Codex account metadata directly from OpenAI.
+│   ├── quota [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--model <MODEL>] [--timeout <TIMEOUT>] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   └── usage [--profile <PROFILE>] [--account-id <ACCOUNT-ID>] [--access-token <ACCESS-TOKEN>] [--refresh/--no-refresh] [--client-id <CLIENT-ID>] [--timeout <TIMEOUT>] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
 └── service  # Local CRS service lifecycle commands for the current server.
     ├── install [--app-dir <APP-DIR>] [--crs-command <CRS-COMMAND>] [--timeout <TIMEOUT>] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
@@ -98,6 +99,7 @@ chatcrs key info --profile admin --json-output
 chatcrs codex token status --profile default --json-output
 chatenv token refresh OpenAI default
 chatcrs codex account --profile default --json-output
+chatcrs codex quota --profile default --json-output
 chatcrs codex usage --profile default --json-output
 ```
 

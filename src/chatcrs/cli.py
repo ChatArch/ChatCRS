@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 import click
 
@@ -621,6 +622,52 @@ def codex_account_command(profile: str, access_token: str | None, refresh: bool,
         _echo_json(payload)
     else:
         click.echo(f"ok={payload['ok']} status={payload['status']} accounts={payload['account_count']} profile={profile}")
+
+
+@codex_group.command(name="quota")
+@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
+@click.option("--account-id", default=None, help="ChatGPT/Codex account id to smoke. If omitted, use the OpenAI token-store account mapping.")
+@click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
+@click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
+@click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
+@click.option("--model", default=codex_direct.DEFAULT_CODEX_QUOTA_MODEL, show_default=True, help="Codex-compatible model for the quota smoke request.")
+@click.option("--timeout", type=float, default=20.0, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def codex_quota_command(
+    profile: str,
+    account_id: str | None,
+    access_token: str | None,
+    refresh: bool,
+    client_id: str | None,
+    model: str,
+    timeout: float,
+    json_output: bool,
+) -> None:
+    """Run a profile-only Codex responses smoke and show quota headers."""
+
+    try:
+        payload = codex_direct.inspect_quota(
+            profile=profile,
+            account_id=account_id,
+            access_token=access_token,
+            refresh=refresh,
+            client_id=client_id,
+            model=model,
+            timeout=timeout,
+        )
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        rate_limits = cast(dict[str, Any], payload.get("rate_limits")) if isinstance(payload.get("rate_limits"), dict) else {}
+        account_resolution = cast(dict[str, Any], payload.get("account_resolution")) if isinstance(payload.get("account_resolution"), dict) else {}
+        click.echo(
+            f"ok={payload['ok']} status={payload['status']} profile={payload.get('profile', profile)} "
+            f"account_id_hash={payload.get('account_id_hash')} account_source={account_resolution.get('source')} "
+            f"primary_used_percent={rate_limits.get('primary_used_percent')} "
+            f"primary_reset_after_seconds={rate_limits.get('primary_reset_after_seconds')}"
+        )
 
 
 @codex_group.command(name="usage")
