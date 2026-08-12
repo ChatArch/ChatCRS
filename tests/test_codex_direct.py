@@ -42,8 +42,11 @@ class FakeCodexTransport:
         if url == "https://chatgpt.com/backend-api/codex/responses":
             assert method == "POST"
             assert headers["authorization"] == "Bearer access-secret"
-            assert headers["chatgpt-account-id"] == "acct_123"
+            assert headers["ChatGPT-Account-ID"] == "acct_123"
+            assert headers["originator"] == "codex_cli_rs"
+            assert headers["user-agent"].startswith("codex_cli_rs/")
             assert isinstance(json_data, dict)
+            assert json_data["model"] == "gpt-5.5"
             assert json_data["store"] is False
             assert json_data["stream"] is True
             assert "max_output_tokens" not in json_data
@@ -235,6 +238,7 @@ def test_codex_quota_uses_responses_smoke_and_redacts_account_id(monkeypatch, tm
     assert payload["account_id_hash"] == "182d1cfdc619"
     assert payload["account_resolution"]["source"] == "token_store_account_id"
     assert payload["request"] == {"store": False, "stream": True}
+    assert payload["model"] == codex_direct.DEFAULT_CODEX_QUOTA_MODEL
     assert payload["has_quota_headers"] is True
     assert payload["rate_limits"]["primary_used_percent"] == 12.5
     assert "account_id" not in payload
@@ -392,7 +396,7 @@ def test_codex_cli_quota_calls_python_api_without_leaking_account_id(monkeypatch
         "access_token": None,
         "refresh": True,
         "client_id": None,
-        "model": "gpt-5",
+        "model": "gpt-5.5",
         "timeout": 20.0,
     }
 

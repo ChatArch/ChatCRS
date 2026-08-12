@@ -30,7 +30,7 @@ CODEX_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/usage"
 CODEX_RESPONSES_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/responses"
 WHAM_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/wham/usage"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
-DEFAULT_CODEX_QUOTA_MODEL = "gpt-5"
+DEFAULT_CODEX_QUOTA_MODEL = "gpt-5.5"
 OPENAI_SERVICE_NAME = "OpenAI"
 OPENAI_OAUTH_TOKEN_TYPE = "openai_oauth"
 OPENAI_CLIENT_ID_KEYS = ("OPENAI_OAUTH_CLIENT_ID", "OPENAI_CODEX_CLIENT_ID", "OPENAI_CLIENT_ID")
@@ -520,6 +520,7 @@ def _codex_quota_smoke_payload(*, model: str = DEFAULT_CODEX_QUOTA_MODEL, prompt
         "model": model,
         "input": [
             {
+                "type": "message",
                 "role": "user",
                 "content": [
                     {
@@ -556,10 +557,11 @@ def get_quota(
         json_data=payload,
         headers={
             "authorization": f"Bearer {access_token}",
-            "chatgpt-account-id": account_id,
-            "host": "chatgpt.com",
+            "ChatGPT-Account-ID": account_id,
+            "content-type": "application/json",
             "accept": "text/event-stream",
-            "user-agent": "codex_cli_rs/0.0.0",
+            "user-agent": "codex_cli_rs/0.0.0 (ChatCRS)",
+            "originator": "codex_cli_rs",
         },
         timeout=timeout,
     )
