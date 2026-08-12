@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.9
+
+### Fixed
+
+- Register the ChatCRS Codex direct OAuth refresher as ChatEnv's `OpenAI` token provider so durable refresh uses `chatenv token refresh OpenAI <profile>` and writes `~/.chatarch/tokens/OpenAI/<profile>.json` through ChatEnv, not a hand-written Codex namespace.
+- Make `chatcrs codex ...` consume ChatEnv's built-in `OpenAI` profiles (`envs/OpenAI/<profile>.env`) and OpenAI token store (`tokens/OpenAI/<profile>.json`) for access/refresh token state while preserving redacted CLI output.
+- Allow `chatcrs codex usage --profile <profile>` to resolve the profile's unique OpenAI account id automatically before reading Codex quota/usage; ambiguous multi-account profiles still require `--account-id`.
+- Hide the deprecated `chatcrs codex token refresh --save-token` compatibility flag from `chatcrs --tree` and docs so operators do not confuse one-off smoke refreshes with the ChatEnv token lifecycle.
+
+### Changed
+
+- Sync README, bilingual CLI docs, interface maps, and tests with the OpenAI ChatEnv token lifecycle contract.
+
 ## 2026-08-12 - 0.2.8
 
 ### Added

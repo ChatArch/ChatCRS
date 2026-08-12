@@ -43,6 +43,8 @@ def _format_command_signature(command: click.Command) -> str:
     arguments: list[str] = []
     options: list[str] = []
     for param in command.params:
+        if getattr(param, "hidden", False):
+            continue
         if isinstance(param, click.Argument):
             arguments.append(_format_argument(param))
         elif isinstance(param, click.Option):
@@ -530,14 +532,14 @@ def codex_group() -> None:
 
 @codex_group.group(name="token")
 def codex_token_group() -> None:
-    """Manage cached OpenAI Codex OAuth tokens in the ChatArch token store."""
+    """Manage OpenAI OAuth tokens through the ChatEnv OpenAI token store."""
 
 
 @codex_token_group.command(name="status")
-@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_token_status_command(profile: str, json_output: bool) -> None:
-    """Show cached Codex OAuth token metadata without printing tokens."""
+    """Show cached OpenAI OAuth token metadata without printing tokens."""
 
     try:
         payload = codex_direct.token_status(profile=profile)
@@ -553,11 +555,11 @@ def codex_token_status_command(profile: str, json_output: bool) -> None:
 
 
 @codex_token_group.command(name="refresh")
-@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
 @click.option("--refresh-token", default=None, help="OpenAI refresh token. Prefer token-store profile for real use.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
 @click.option("--timeout", type=float, default=20.0, show_default=True)
-@click.option("--save-token", is_flag=True, default=False, help="Persist refreshed token values under ~/.chatarch/tokens/Codex/<profile>.json.")
+@click.option("--save-token", is_flag=True, default=False, hidden=True, help="Deprecated compatibility flag; use `chatenv token refresh OpenAI <profile>`.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_token_refresh_command(
     profile: str,
@@ -567,7 +569,13 @@ def codex_token_refresh_command(
     save_token: bool,
     json_output: bool,
 ) -> None:
-    """Refresh an OpenAI Codex access token without printing token values."""
+    """Refresh an OpenAI OAuth access token without printing token values.
+
+    Prefer `chatenv token refresh OpenAI <profile>` for durable token-store writes.
+    This command is kept as a one-off redacted OAuth smoke helper; `--save-token`
+    remains accepted as a hidden compatibility flag and writes the OpenAI token
+    service, never a Codex-specific namespace.
+    """
 
     try:
         if not refresh_token:
@@ -575,13 +583,13 @@ def codex_token_refresh_command(
             refresh_token = values.get("refresh_token") if isinstance(values, dict) else None
         payload = codex_direct.refresh_access_token(refresh_token=refresh_token or "", client_id=client_id, timeout=timeout)
         output = dict(payload.get("safe") or {"ok": payload.get("ok"), "status": payload.get("status")})
-        output.update({"mutated": False, "profile": profile})
+        output.update({"mutated": False, "profile": profile, "token_service": codex_direct.OPENAI_SERVICE_NAME})
         if payload.get("ok") and save_token:
             status = codex_direct.save_token_values(
                 profile=profile,
                 values=payload.get("values", {}),
                 expires_at=payload.get("expires_at") or "",
-                source="refresh",
+                source="compat-refresh",
             )
             output.update({"mutated": True, "token_saved": status.get("token_present", False), "token_file": status.get("token_file")})
     except (OSError, ValueError) as exc:
@@ -596,7 +604,7 @@ def codex_token_refresh_command(
 
 
 @codex_group.command(name="account")
-@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
 @click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
 @click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
@@ -616,8 +624,8 @@ def codex_account_command(profile: str, access_token: str | None, refresh: bool,
 
 
 @codex_group.command(name="usage")
-@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
-@click.option("--account-id", required=True, help="ChatGPT/Codex account id to inspect.")
+@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
+@click.option("--account-id", default=None, help="ChatGPT/Codex account id to inspect. If omitted, resolve the unique account for the OpenAI profile.")
 @click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
 @click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
@@ -625,7 +633,7 @@ def codex_account_command(profile: str, access_token: str | None, refresh: bool,
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_usage_command(
     profile: str,
-    account_id: str,
+    account_id: str | None,
     access_token: str | None,
     refresh: bool,
     client_id: str | None,
@@ -650,7 +658,7 @@ def codex_usage_command(
     else:
         rate_limits = payload.get("rate_limits") if isinstance(payload.get("rate_limits"), dict) else {}
         click.echo(
-            f"ok={payload['ok']} status={payload['status']} account_id={account_id} "
+            f"ok={payload['ok']} status={payload['status']} account_id={payload.get('account_id')} "
             f"primary_used_percent={rate_limits.get('primary_used_percent')}"
         )
 
