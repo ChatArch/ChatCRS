@@ -32,7 +32,7 @@ def isolate_crs_profile_env(tmp_path, monkeypatch):
 
 
 class FakeCrsHandler(BaseHTTPRequestHandler):
-    admin_token = "admin-session-token"
+    admin_token = "fixture-admin-session"
     last_batch_stats_body: dict[str, Any] | None = None
 
     def log_message(self, format: str, *args: object) -> None:  # pragma: no cover - silence tests
@@ -161,7 +161,7 @@ class FakeCrsHandler(BaseHTTPRequestHandler):
             )
             return
         if self.path == "/openai/key-info":
-            if self.headers.get("authorization") != "Bearer cr_live_key":
+            if self.headers.get("authorization") != "Bearer fixture-caller-key":
                 self._send_json(401, {"success": False, "message": "missing api key"})
                 return
             self._send_json(
@@ -254,7 +254,7 @@ def test_remote_admin_cli_reports_accounts_usage_and_key_stats_without_secrets()
         assert account_payload["ok"] is True
         assert account_payload["accounts"][0]["id"] == "acct_1"
         assert account_payload["accounts"][0]["usage"]["total"]["requests"] == 7
-        assert "admin-session-token" not in account_result.output
+        assert "fixture-admin-session" not in account_result.output
 
         key_result = runner.invoke(
             main,
@@ -312,7 +312,7 @@ def test_api_key_only_cli_reports_key_info_without_admin_credentials():
                 "--base-url",
                 base_url,
                 "--api-key",
-                "cr_live_key",
+                "fixture-caller-key",
                 "--json-output",
             ],
         )
@@ -321,7 +321,7 @@ def test_api_key_only_cli_reports_key_info_without_admin_credentials():
         assert payload["ok"] is True
         assert payload["key_info"]["name"] == "primary"
         assert payload["key_info"]["usage"]["total"]["requests"] == 7
-        assert "cr_live_key" not in result.output
+        assert "fixture-caller-key" not in result.output
     finally:
         server.shutdown()
         server.server_close()
@@ -344,7 +344,7 @@ def _write_crs_profile(home: Path, *, base_url: str) -> None:
     env_dir.mkdir(parents=True)
     (env_dir / "admin.env").write_text(
         f"CRS_API_BASE={base_url}\n"
-        "CRS_API_KEY=cr_live_key\n"
+        "CRS_API_KEY=fixture-caller-key\n"
         "CRS_USERNAME=admin\n"
         "CRS_PASSWORD=secret\n"
     )

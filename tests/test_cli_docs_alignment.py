@@ -15,6 +15,10 @@ EXPECTED_CLI_LEAVES = {
     "chatcrs admin keys list",
     "chatcrs admin keys show",
     "chatcrs key info",
+    "chatcrs codex token status",
+    "chatcrs codex token refresh",
+    "chatcrs codex account",
+    "chatcrs codex usage",
     "chatcrs service install",
     "chatcrs service update",
     "chatcrs service start",
@@ -76,6 +80,9 @@ EXPECTED_HTTP_INTERFACES = {
     "POST /admin/api-keys/batch-stats",
     "POST /admin/api-keys/batch-last-usage",
     "GET /openai/key-info",
+    "POST https://auth.openai.com/oauth/token",
+    "GET https://auth.openai.com/api/accounts",
+    "GET https://chatgpt.com/backend-api/codex/usage",
 }
 
 FORBIDDEN_PUBLIC_DOC_FRAGMENTS = (

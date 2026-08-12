@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.8
+
+### Added
+
+- Add `chatcrs codex ...` direct OpenAI Codex helpers for redacted OAuth token status/refresh, account metadata inspection, and usage/quota inspection without going through CRS Admin API.
+- Add `chatcrs.codex_direct` as the importable Python API behind the new CLI leaves: `token_status`, `refresh_access_token`, `save_token_values`, `inspect_account`, and `inspect_usage`.
+
+### Changed
+
+- Sync README, bilingual CLI docs, interface maps, and CLI-doc alignment tests with the live `chatcrs --tree` Codex command surface.
+
 ## 2026-08-12 - 0.2.7
 
 ### Changed

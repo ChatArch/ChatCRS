@@ -96,6 +96,7 @@ ChatCRS is ChatArch's CRS management CLI. Outside-server management focuses on C
 | Admin account status refresh | `chatcrs admin accounts refresh-status` | Dry-run by default; `--execute` calls the CRS reset-status endpoint |
 | Admin API key statistics | `chatcrs admin keys list`, `chatcrs admin keys show` | Redacted by default, optional stats |
 | API-key-only info | `chatcrs key info` | No administrator login |
+| Codex direct usage | `chatcrs codex account`, `chatcrs codex usage` | Direct OpenAI/Codex account and usage/quota inspection with redacted output |
 | Server-local service | `chatcrs service ...` | Runs local commands only on the CRS server itself |
 
 For the endpoint-level map, see [CLI and HTTP interface map](interfaces.md).

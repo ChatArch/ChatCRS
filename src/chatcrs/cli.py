@@ -6,6 +6,7 @@ import json
 
 import click
 
+import chatcrs.codex_direct as codex_direct
 import chatcrs.local as local_management
 import chatcrs.remote as remote_management
 import chatcrs.service as service_management
@@ -520,6 +521,138 @@ def key_info_command(
         _echo_json(payload)
     else:
         click.echo(f"ok={payload['ok']} status={payload['status']} mutated={payload['mutated']}")
+
+
+@main.group(name="codex")
+def codex_group() -> None:
+    """Direct OpenAI Codex account token and usage helpers."""
+
+
+@codex_group.group(name="token")
+def codex_token_group() -> None:
+    """Manage cached OpenAI Codex OAuth tokens in the ChatArch token store."""
+
+
+@codex_token_group.command(name="status")
+@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def codex_token_status_command(profile: str, json_output: bool) -> None:
+    """Show cached Codex OAuth token metadata without printing tokens."""
+
+    try:
+        payload = codex_direct.token_status(profile=profile)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(
+            f"ok={payload['ok']} service={payload['service']} profile={payload['profile']} "
+            f"token_present={payload['token_present']} expires_at={payload.get('expires_at', '')}"
+        )
+
+
+@codex_token_group.command(name="refresh")
+@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--refresh-token", default=None, help="OpenAI refresh token. Prefer token-store profile for real use.")
+@click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
+@click.option("--timeout", type=float, default=20.0, show_default=True)
+@click.option("--save-token", is_flag=True, default=False, help="Persist refreshed token values under ~/.chatarch/tokens/Codex/<profile>.json.")
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def codex_token_refresh_command(
+    profile: str,
+    refresh_token: str | None,
+    client_id: str | None,
+    timeout: float,
+    save_token: bool,
+    json_output: bool,
+) -> None:
+    """Refresh an OpenAI Codex access token without printing token values."""
+
+    try:
+        if not refresh_token:
+            values = codex_direct.read_stored_token(profile=profile).get("values", {})
+            refresh_token = values.get("refresh_token") if isinstance(values, dict) else None
+        payload = codex_direct.refresh_access_token(refresh_token=refresh_token or "", client_id=client_id, timeout=timeout)
+        output = dict(payload.get("safe") or {"ok": payload.get("ok"), "status": payload.get("status")})
+        output.update({"mutated": False, "profile": profile})
+        if payload.get("ok") and save_token:
+            status = codex_direct.save_token_values(
+                profile=profile,
+                values=payload.get("values", {}),
+                expires_at=payload.get("expires_at") or "",
+                source="refresh",
+            )
+            output.update({"mutated": True, "token_saved": status.get("token_present", False), "token_file": status.get("token_file")})
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(output)
+    else:
+        click.echo(
+            f"ok={output['ok']} profile={profile} token_present={output.get('token_present', False)} "
+            f"refresh_token_rotated={output.get('refresh_token_rotated', False)} mutated={output.get('mutated', False)}"
+        )
+
+
+@codex_group.command(name="account")
+@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
+@click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
+@click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
+@click.option("--timeout", type=float, default=20.0, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def codex_account_command(profile: str, access_token: str | None, refresh: bool, client_id: str | None, timeout: float, json_output: bool) -> None:
+    """Read OpenAI Codex account metadata directly from OpenAI."""
+
+    try:
+        payload = codex_direct.inspect_account(profile=profile, access_token=access_token, refresh=refresh, client_id=client_id, timeout=timeout)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        click.echo(f"ok={payload['ok']} status={payload['status']} accounts={payload['account_count']} profile={profile}")
+
+
+@codex_group.command(name="usage")
+@click.option("--profile", default="default", show_default=True, help="Codex token profile under tokens/Codex/<profile>.json.")
+@click.option("--account-id", required=True, help="ChatGPT/Codex account id to inspect.")
+@click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
+@click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
+@click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
+@click.option("--timeout", type=float, default=20.0, show_default=True)
+@click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
+def codex_usage_command(
+    profile: str,
+    account_id: str,
+    access_token: str | None,
+    refresh: bool,
+    client_id: str | None,
+    timeout: float,
+    json_output: bool,
+) -> None:
+    """Read Codex usage and quota metadata directly from OpenAI."""
+
+    try:
+        payload = codex_direct.inspect_usage(
+            profile=profile,
+            account_id=account_id,
+            access_token=access_token,
+            refresh=refresh,
+            client_id=client_id,
+            timeout=timeout,
+        )
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        _echo_json(payload)
+    else:
+        rate_limits = payload.get("rate_limits") if isinstance(payload.get("rate_limits"), dict) else {}
+        click.echo(
+            f"ok={payload['ok']} status={payload['status']} account_id={account_id} "
+            f"primary_used_percent={rate_limits.get('primary_used_percent')}"
+        )
 
 
 def _service_target(
