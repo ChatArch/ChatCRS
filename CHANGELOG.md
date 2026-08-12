@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-08-12 - 0.2.12
+
+### Fixed
+
+- Change the Codex quota-smoke default model to live-validated `gpt-5.5`; `gpt-5` and `gpt-5.6` returned `400` for ChatGPT-account Codex on the production CRS host.
+- Send Codex CLI-compatible headers for quota smoke (`originator: codex_cli_rs`, canonical `ChatGPT-Account-ID`, SSE accept/content-type) and use the Responses message input shape.
+
 ## 2026-08-12 - 0.2.11
 
 ### Added

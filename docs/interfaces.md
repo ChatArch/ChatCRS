@@ -56,8 +56,9 @@ chatcrs
 | `chatcrs codex token status` | local `tokens/OpenAI/<profile>.json` metadata | OpenAI ChatEnv profile/token store | No | `chatcrs.codex_direct.token_status` |
 | `chatcrs codex token refresh` | `POST https://auth.openai.com/oauth/token` | OpenAI refresh token from explicit option or `envs/OpenAI/<profile>.env` / `tokens/OpenAI/<profile>.json` | No durable mutation by default; durable refresh should use `chatenv token refresh OpenAI <profile>` so ChatEnv writes `tokens/OpenAI/<profile>.json` | `chatcrs.codex_direct.refresh_access_token` / `chatcrs.codex_direct.refresh_chatenv_token` |
 | `chatcrs codex account` | `GET https://auth.openai.com/api/accounts` | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh | No | `chatcrs.codex_direct.inspect_account` |
-| `chatcrs codex quota` | `POST https://chatgpt.com/backend-api/codex/responses` with `store:false`, `stream:true`, and stored or explicit `chatgpt-account-id`; body is only used as a quota smoke and output keeps quota headers plus account-id hash | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh; profile-only use prefers `tokens/OpenAI/<profile>.json` `values.account_id` | Sends a minimal upstream smoke request; does not write local state | `chatcrs.codex_direct.inspect_quota` |
+| `chatcrs codex quota` | `POST https://chatgpt.com/backend-api/codex/responses` | OpenAI access token + stored/explicit account mapping | Sends minimal quota smoke; no local write | `chatcrs.codex_direct.inspect_quota` |
 | `chatcrs codex usage` | `GET https://chatgpt.com/backend-api/codex/usage` with stored or explicit `chatgpt-account-id`; `GET https://auth.openai.com/api/accounts` only when no token-store account mapping exists and `--account-id` is omitted | OpenAI access token from option or OpenAI ChatEnv token store; optional refresh; profile-only use prefers `tokens/OpenAI/<profile>.json` `values.account_id` and otherwise auto-resolves a unique account id | No | `chatcrs.codex_direct.inspect_usage` |
+
 | `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service start` | local `crs start` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
@@ -66,6 +67,8 @@ chatcrs
 | `chatcrs service status` | local `crs status` via `local_command` | Current server shell | Read-only local execution by default | `chatcrs.service.run_service_action` |
 | `chatcrs service switch-branch` | local `crs switch-branch <branch>` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update-pricing` | local `crs update-pricing` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
+
+Note: Quota smoke uses `store:false`, `stream:true`, canonical `ChatGPT-Account-ID`, `originator: codex_cli_rs`, and the default live-validated smoke model `gpt-5.5`. Output keeps quota headers and account-id hash only.
 
 ## 配置边界
 
