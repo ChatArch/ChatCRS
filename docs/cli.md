@@ -118,7 +118,7 @@ chatcrs codex account --profile default --json-output
 chatcrs codex usage --profile default --json-output
 ```
 
-`codex` 分支直接调用 OpenAI/Codex OAuth 与 backend API，不经过 CRS Admin API。稳定 OAuth profile 使用 ChatEnv 内置 `OpenAI` namespace（`envs/OpenAI/<profile>.env`），runtime access/refresh token 使用同一 `OpenAI` token store（`tokens/OpenAI/<profile>.json`）。持久刷新应运行 `chatenv token refresh OpenAI <profile>`；`chatcrs codex ...` 只消费该状态并输出脱敏 token/account/usage 摘要，不打印 access token、refresh token 或 id token。
+`codex` 分支直接调用 OpenAI/Codex OAuth 与 backend API，不经过 CRS Admin API。稳定 OAuth profile 使用 ChatEnv 内置 `OpenAI` namespace（`envs/OpenAI/<profile>.env`），runtime access/refresh token 使用同一 `OpenAI` token store（`tokens/OpenAI/<profile>.json`）。如果 token-store values 中保存了非 secret `account_id` 映射，`chatcrs codex usage --profile <profile>` 会优先用它查询 quota；没有映射时才退回 OpenAI accounts API 自动解析唯一账号。持久刷新应运行 `chatenv token refresh OpenAI <profile>`；`chatcrs codex ...` 只消费该状态并输出脱敏 token/account/usage 摘要，不打印 access token、refresh token 或 id token。
 
 ## Server-local service { #server-local-service }
 

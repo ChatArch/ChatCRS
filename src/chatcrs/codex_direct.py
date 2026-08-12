@@ -105,10 +105,14 @@ def _oauth_token_url(oauth_base_url: str | None = None) -> str:
     return f"{(oauth_base_url or AUTH_BASE_URL).rstrip('/')}/oauth/token"
 
 
-def _base_url_hash(base_url: str) -> str:
+def _short_hash(value: str) -> str:
     import hashlib
 
-    return hashlib.sha256(base_url.rstrip("/").encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _base_url_hash(base_url: str) -> str:
+    return _short_hash(base_url.rstrip("/"))[:16]
 
 
 def extract_codex_rate_limit_headers(headers: dict[str, Any] | None) -> dict[str, float | None]:
@@ -308,6 +312,11 @@ def refresh_chatenv_token(
     refreshed_values = dict(refreshed.get("values") or {})
     if "refresh_token" not in refreshed_values:
         refreshed_values["refresh_token"] = refresh_token
+    for metadata_key in ("account_id", "account_label", "account_name"):
+        metadata_value = existing_values.get(metadata_key)
+        if metadata_value and metadata_key not in refreshed_values:
+            refreshed_values[metadata_key] = metadata_value
+    account_id = refreshed_values.get("account_id")
     return TokenRefreshResult(
         values={key: value for key, value in refreshed_values.items() if value},
         token_type=OPENAI_OAUTH_TOKEN_TYPE,
@@ -320,6 +329,8 @@ def refresh_chatenv_token(
             "refresh_token_present": bool(refreshed_values.get("refresh_token")),
             "refresh_token_rotated": bool(refreshed.get("refresh_token_rotated")),
             "id_token_present": bool(refreshed_values.get("id_token")),
+            "account_id_present": isinstance(account_id, str) and bool(account_id),
+            "account_id_hash": _short_hash(account_id) if isinstance(account_id, str) and account_id else "",
         },
         expires_at=refreshed.get("expires_at") or "",
     )
@@ -359,12 +370,15 @@ def save_token_values(
     """
 
     profile_name = normalize_token_profile(profile)
+    account_id = values.get("account_id") if isinstance(values.get("account_id"), str) else ""
     summary = {
         "provider": OPENAI_SERVICE_NAME,
         "profile": profile_name,
         "access_token_present": bool(values.get("access_token")),
         "refresh_token_present": bool(values.get("refresh_token")),
         "id_token_present": bool(values.get("id_token")),
+        "account_id_present": bool(account_id),
+        "account_id_hash": _short_hash(account_id) if account_id else "",
     }
     return _token_store(home).write(
         OPENAI_SERVICE_NAME,
@@ -537,7 +551,19 @@ def _account_ids_from_payload(payload: dict[str, Any]) -> list[str]:
     return ids
 
 
-def _resolve_account_id_from_profile(*, access_token: str, timeout: float) -> tuple[str, dict[str, Any]]:
+def _stored_account_id(*, profile: str, home: str | Path | None = None) -> str:
+    values = _stored_values(profile=profile, home=home)
+    account_id = values.get("account_id")
+    return account_id if isinstance(account_id, str) and account_id else ""
+
+
+def _resolve_account_id_from_profile(*, profile: str, access_token: str, timeout: float, home: str | Path | None = None) -> tuple[str, dict[str, Any]]:
+    stored_account_id = _stored_account_id(profile=profile, home=home)
+    if stored_account_id:
+        return stored_account_id, {
+            "source": "token_store_account_id",
+            "account_id_hash": _short_hash(stored_account_id),
+        }
     account_payload = get_account(access_token=access_token, timeout=timeout)
     ids = _account_ids_from_payload(account_payload)
     if len(ids) == 1:
@@ -576,7 +602,7 @@ def inspect_usage(
     )
     account_resolution: dict[str, Any] | None = None
     if not account_id:
-        account_id, account_resolution = _resolve_account_id_from_profile(access_token=token, timeout=timeout)
+        account_id, account_resolution = _resolve_account_id_from_profile(profile=profile, access_token=token, timeout=timeout, home=home)
     payload = get_usage(access_token=token, account_id=account_id, timeout=timeout)
     payload["profile"] = _normalize_profile(profile)
     payload["token_service"] = OPENAI_SERVICE_NAME
