@@ -466,10 +466,10 @@ def test_codex_cli_surface_is_registered():
 
     assert result.exit_code == 0, result.output
     assert "codex  # Direct OpenAI Codex account token and usage helpers." in result.output
-    assert "refresh [--profile <PROFILE>]" in result.output
-    assert "account [--profile <PROFILE>]" in result.output
-    assert "quota [--profile <PROFILE>]" in result.output
-    assert "usage [--profile <PROFILE>]" in result.output
+    assert "refresh [--profile PROFILE]" in result.output
+    assert "account [--profile PROFILE]" in result.output
+    assert "quota [--profile PROFILE]" in result.output
+    assert "usage [--profile PROFILE]" in result.output
     assert "tokens/Codex" not in result.output
 
 

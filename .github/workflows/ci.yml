@@ -31,5 +31,6 @@ jobs:
       - run: python -m pytest -q
       - run: chatcrs --version
       - run: chatcrs --tree
+      - run: chatcrs --tree-brief
       - run: python -m mkdocs build --strict
       - run: python -m build

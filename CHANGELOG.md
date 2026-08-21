@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-08-21 - 0.2.15
+
+### Changed
+
+- Replace the package-local Click tree renderer with `chatstyle.add_tree_option` from `chatstyle>=0.2.0,<0.3.0`, using `chatcrs` as the canonical root for console and module readback.
+- Add `chatcrs --tree-brief`; the default `--tree` keeps parameter signatures while brief output retains registered command nodes and descriptions without signatures.
+- Require `chatenv>=0.2.10,<0.3.0` and smoke both shared tree modes in package tests and CI.
+
 ## 2026-08-13 - 0.2.14
 
 ### Added
