@@ -46,4 +46,5 @@ def test_ci_workflow_installs_package_and_smokes_cli_tree():
     assert "python -m pip install -e .[dev,docs]" in workflow
     assert "chatcrs --version" in workflow
     assert "chatcrs --tree" in workflow
+    assert "chatcrs --tree-brief" in workflow
     assert "python -m mkdocs build --strict" in workflow

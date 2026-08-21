@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from chatstyle import render_click_tree
+
 from chatcrs.cli import main
 from chatcrs.config import ChatcrsConfig
 
@@ -118,8 +120,23 @@ def _reference_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
+def _first_text_block(path: str) -> str:
+    _, separator, remainder = _reference_text(path).partition("```text")
+    assert separator, f"{path} has no text code block"
+    block, separator, _ = remainder.partition("```")
+    assert separator, f"{path} has an unterminated text code block"
+    return block.strip()
+
+
 def test_final_cli_surface_matches_http_first_tree():
     assert _leaf_commands(main) == EXPECTED_CLI_LEAVES
+
+
+def test_public_cli_tree_snapshots_match_shared_renderer():
+    expected = render_click_tree(main, root_name="chatcrs")
+
+    for path in ("README.md", "README.en.md", "docs/cli.md", "docs/cli.en.md"):
+        assert _first_text_block(path) == expected
 
 
 def test_removed_operational_workflows_are_not_registered():
