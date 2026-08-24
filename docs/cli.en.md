@@ -25,7 +25,7 @@ chatcrs
 ├── codex  # Direct OpenAI Codex account token and usage helpers.
 │   ├── account [--profile PROFILE] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Read a safe OpenAI Codex account summary from token claims and API probe.
 │   ├── quota [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--model MODEL] [--timeout TIMEOUT] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
-│   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv OpenAI token store.
+│   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv Codex token store.
 │   │   ├── refresh [--profile PROFILE] [--refresh-token REFRESH-TOKEN] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   │   └── status [--profile PROFILE] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
 │   └── usage [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
@@ -72,7 +72,7 @@ chatcrs
 | `chatcrs admin keys show` | Single API key summary |
 | `chatcrs key info` | API-key-only self check |
 | `chatcrs codex token status` | Cached OpenAI OAuth token metadata |
-| `chatcrs codex token refresh` | Refresh an OpenAI access token; prefer `chatenv token refresh OpenAI <profile>` |
+| `chatcrs codex token refresh` | Refresh an OpenAI access token; prefer `chatenv token refresh Codex <profile>` |
 | `chatcrs codex account` | Safe OpenAI Codex account summary from token claims/API probe |
 | `chatcrs codex quota` | Profile-only Codex responses quota smoke; returns quota headers and account-id hash |
 | `chatcrs codex usage` | Direct Codex usage inspection via usage endpoint |
@@ -116,15 +116,15 @@ chatcrs key info --profile admin --path /openai/key-info --json-output
 ```bash
 chatcrs codex token status --profile default --json-output
 chatcrs codex token refresh --profile default --json-output
-chatenv token refresh OpenAI default
+chatenv token refresh Codex default
 chatcrs codex account --profile default --json-output
 chatcrs codex quota --profile default --json-output
 chatcrs codex usage --profile default --json-output
 ```
 
-The `codex` branch calls OpenAI/Codex OAuth and backend APIs directly instead of using the CRS Admin API. Stable OAuth profile data uses ChatEnv's built-in `OpenAI` namespace (`envs/OpenAI/<profile>.env`), and runtime access/refresh token state uses the same `OpenAI` token store (`tokens/OpenAI/<profile>.json`). If token-store values include a non-secret `account_id` mapping, `chatcrs codex quota --profile <profile>` uses it for a Codex responses quota smoke; the default smoke model is the production-validated `gpt-5.5` (`gpt-5` / `gpt-5.6` returned 400 for ChatGPT-account Codex). `chatcrs codex usage --profile <profile>` keeps the legacy usage endpoint behavior before falling back to the OpenAI accounts API to auto-resolve one unique account. Durable refresh should run `chatenv token refresh OpenAI <profile>`; `chatcrs codex ...` only consumes that state and prints redacted token/account/usage summaries, never raw access tokens, refresh tokens, id tokens, raw account ids, email addresses, or user ids.
+The `codex` branch calls OpenAI/Codex OAuth and backend APIs directly instead of using the CRS Admin API. Stable OAuth profile data uses ChatEnv's ChatCRS-owned `Codex` namespace (`envs/Codex/<profile>.env`), and runtime access/refresh token state uses the same `OpenAI` token store (`tokens/Codex/<profile>.json`). If token-store values include a non-secret `account_id` mapping, `chatcrs codex quota --profile <profile>` uses it for a Codex responses quota smoke; the default smoke model is the production-validated `gpt-5.5` (`gpt-5` / `gpt-5.6` returned 400 for ChatGPT-account Codex). `chatcrs codex usage --profile <profile>` keeps the legacy usage endpoint behavior before falling back to the OpenAI accounts API to auto-resolve one unique account. Durable refresh should run `chatenv token refresh Codex <profile>`; `chatcrs codex ...` only consumes that state and prints redacted token/account/usage summaries, never raw access tokens, refresh tokens, id tokens, raw account ids, email addresses, or user ids.
 
-OpenAI profiles can set non-secret relay base URLs: `OPENAI_OAUTH_BASE_URL` overrides the OAuth token/accounts upstream, and `CHATGPT_BACKEND_BASE_URL` overrides the ChatGPT backend upstream (usually including the `/backend-api` prefix). These fields only change the request destination; Authorization and `ChatGPT-Account-ID` remain client-supplied request headers and must not be written into proxy config or logs.
+Codex profiles can set non-secret relay base URLs: `OPENAI_OAUTH_BASE_URL` overrides the OAuth token/accounts upstream, and `CHATGPT_BACKEND_BASE_URL` overrides the ChatGPT backend upstream (usually including the `/backend-api` prefix). These fields only change the request destination; Authorization and `ChatGPT-Account-ID` remain client-supplied request headers and must not be written into proxy config or logs.
 
 ## Server-local service { #server-local-service }
 

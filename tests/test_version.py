@@ -15,4 +15,5 @@ def test_shared_runtime_dependencies_and_refresh_provider_entry_point_declared()
     assert '"chatenv>=0.2.10,<0.3.0"' in pyproject
     assert '[project.entry-points."chatenv.token_refreshers"]' in pyproject
     assert 'CRS = "chatcrs.tokens:refresh_chatenv_token"' in pyproject
-    assert 'OpenAI = "chatcrs.codex_direct:refresh_chatenv_token"' in pyproject
+    assert 'Codex = "chatcrs.codex_direct:refresh_chatenv_token"' in pyproject
+    assert 'OpenAI = "chatcrs.codex_direct:refresh_chatenv_token"' not in pyproject

@@ -28,7 +28,7 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 
 ## Codex/OpenAI relay 字段
 
-`chatcrs codex ...` 复用 ChatEnv 的 `OpenAI` namespace。稳定 refresh seed 与非 secret relay 字段在 `envs/OpenAI/<profile>.env`，runtime access/refresh token 与 account metadata 在 `tokens/OpenAI/<profile>.json`。
+`chatcrs codex ...` 复用 ChatEnv 中由 ChatCRS 拥有的 `Codex` namespace。稳定 refresh seed 与非 secret relay 字段在 `envs/Codex/<profile>.env`，runtime access/refresh token 与 account metadata 在 `tokens/Codex/<profile>.json`。
 
 | 字段 | 用途 | 敏感 |
 |---|---|---|
