@@ -1,10 +1,8 @@
 """Direct OpenAI/Codex account and usage helpers backed by ChatEnv.
 
-ChatEnv owns stable OpenAI profiles (``envs/OpenAI/<profile>.env``) and the
-runtime token store (``tokens/OpenAI/<profile>.json``). ChatCRS only provides the
-OpenAI OAuth refresh semantics and consumes the resulting access token for
-Codex account/usage inspection. Safe outputs never include raw access tokens,
-refresh tokens, id tokens, cookies, or API keys.
+ChatCRS owns stable Codex profiles (``envs/Codex/<profile>.env``) and the
+runtime token store (``tokens/Codex/<profile>.json``). Safe outputs never
+include raw access tokens, refresh tokens, id tokens, cookies, or API keys.
 """
 
 from __future__ import annotations
@@ -19,10 +17,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from chatenv import EnvStore, OpenAIConfig, TokenRefreshResult, TokenStore, get_paths
+from chatenv import EnvStore, TokenRefreshResult, TokenStore, get_paths
 from chatenv.token_refreshers import refresh_token as refresh_runtime_token
 from chatenv.tokens import normalize_token_profile
 
+from chatcrs.config import CodexConfig
 from chatcrs.redaction import redact
 
 AUTH_BASE_URL = "https://auth.openai.com"
@@ -33,6 +32,8 @@ CODEX_RESPONSES_URL = f"{CHATGPT_BACKEND_BASE_URL}/codex/responses"
 WHAM_USAGE_URL = f"{CHATGPT_BACKEND_BASE_URL}/wham/usage"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 DEFAULT_CODEX_QUOTA_MODEL = "gpt-5.5"
+CODEX_SERVICE_NAME = "Codex"
+CODEX_TOKEN_TYPE = "openai_codex_oauth"
 OPENAI_SERVICE_NAME = "OpenAI"
 OPENAI_OAUTH_TOKEN_TYPE = "openai_oauth"
 OPENAI_CLIENT_ID_KEYS = ("OPENAI_OAUTH_CLIENT_ID", "OPENAI_CODEX_CLIENT_ID", "OPENAI_CLIENT_ID")
@@ -42,11 +43,7 @@ CHATGPT_BACKEND_BASE_URL_KEYS = (
     "OPENAI_CODEX_BACKEND_BASE_URL",
 )
 
-# Backward-compatible constants for callers that imported the 0.2.8 names. The
-# storage service is intentionally OpenAI, not Codex: Codex uses ChatEnv's shared
-# OpenAI profile schema.
-CODEX_SERVICE_NAME = OPENAI_SERVICE_NAME
-CODEX_TOKEN_TYPE = OPENAI_OAUTH_TOKEN_TYPE
+# Backward-compatible constants for callers that imported the 0.2.8 names.
 OAUTH_TOKEN_URL = f"{AUTH_BASE_URL}/oauth/token"
 
 
@@ -361,7 +358,7 @@ def _redact_identity(value: Any) -> Any:
     return value
 
 
-def _load_openai_profile_values(
+def _load_codex_profile_values(
     profile: str | None,
     *,
     home: str | Path | None = None,
@@ -371,22 +368,22 @@ def _load_openai_profile_values(
     store = env_store or EnvStore(get_paths(home).envs_dir)
     try:
         profile_path = (
-            store.active_path(OpenAIConfig)
+            store.active_path(CodexConfig)
             if profile_name == "default"
-            else store.profile_path(OpenAIConfig, profile_name)
+            else store.profile_path(CodexConfig, profile_name)
         )
     except ValueError as exc:
-        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}") from exc
+        raise ValueError(f"Codex ChatEnv profile not found or invalid: {profile_name}") from exc
     if not profile_path.exists():
-        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}")
+        raise ValueError(f"Codex ChatEnv profile not found or invalid: {profile_name}")
     try:
         values = (
-            store.load_active(OpenAIConfig)
+            store.load_active(CodexConfig)
             if profile_name == "default"
-            else store.load_profile(OpenAIConfig, profile_name)
+            else store.load_profile(CodexConfig, profile_name)
         )
     except ValueError as exc:
-        raise ValueError(f"OpenAI ChatEnv profile not found or invalid: {profile_name}") from exc
+        raise ValueError(f"Codex ChatEnv profile not found or invalid: {profile_name}") from exc
     return profile_name, {str(key): str(value) for key, value in values.items() if value is not None}
 
 
@@ -409,12 +406,18 @@ def _configured_backend_base_url(values: dict[str, str] | None = None) -> str:
     return CHATGPT_BACKEND_BASE_URL
 
 
-def _openai_profile_values_or_empty(*, profile: str, home: str | Path | None = None) -> dict[str, str]:
+def _codex_profile_values_or_empty(*, profile: str, home: str | Path | None = None) -> dict[str, str]:
     try:
-        _profile_name, values = _load_openai_profile_values(profile, home=home)
+        _profile_name, values = _load_codex_profile_values(profile, home=home)
     except ValueError:
         return {}
     return values
+
+
+def _openai_profile_values_or_empty(*, profile: str, home: str | Path | None = None) -> dict[str, str]:
+    """Compatibility alias for callers moving from ChatCRS 0.2.15."""
+
+    return _codex_profile_values_or_empty(profile=profile, home=home)
 
 
 def refresh_access_token(
@@ -488,21 +491,21 @@ def refresh_chatenv_token(
     env_store: EnvStore | None = None,
     token_store: TokenStore | None = None,
 ) -> TokenRefreshResult:
-    """Refresh OpenAI OAuth runtime state for ChatEnv's token lifecycle.
+    """Refresh Codex OAuth runtime state for ChatEnv's token lifecycle.
 
-    Stable OAuth bootstrap values come from the registered ChatEnv ``OpenAI``
-    profile. Rotated refresh tokens are read from the existing ChatEnv token
-    store when present. ChatEnv owns the final token-store write.
+    Stable OAuth bootstrap values come from the registered ChatEnv ``Codex``
+    profile. Rotated refresh tokens are read from the existing Codex token store
+    when present. ChatEnv owns the final token-store write.
     """
 
-    if service != OPENAI_SERVICE_NAME:
-        raise ValueError(f"ChatCRS can refresh only {OPENAI_SERVICE_NAME} tokens")
-    profile_name, values = _load_openai_profile_values(profile, home=home, env_store=env_store)
+    if service != CODEX_SERVICE_NAME:
+        raise ValueError(f"ChatCRS can refresh only {CODEX_SERVICE_NAME} tokens")
+    profile_name, values = _load_codex_profile_values(profile, home=home, env_store=env_store)
     store = token_store or TokenStore(home=home)
-    existing_values = _token_values(store.read(OPENAI_SERVICE_NAME, profile_name))
+    existing_values = _token_values(store.read(CODEX_SERVICE_NAME, profile_name))
     refresh_token = existing_values.get("refresh_token") or values.get("OPENAI_REFRESH_TOKEN")
     if not isinstance(refresh_token, str) or not refresh_token:
-        raise ValueError(f"OpenAI ChatEnv profile {profile_name} is missing OPENAI_REFRESH_TOKEN")
+        raise ValueError(f"Codex ChatEnv profile {profile_name} is missing OPENAI_REFRESH_TOKEN")
 
     oauth_base_url = values.get("OPENAI_OAUTH_BASE_URL") or AUTH_BASE_URL
     client_id, client_id_source = _configured_client_id(values)
@@ -524,9 +527,9 @@ def refresh_chatenv_token(
     account_id = refreshed_values.get("account_id")
     return TokenRefreshResult(
         values={key: value for key, value in refreshed_values.items() if value},
-        token_type=OPENAI_OAUTH_TOKEN_TYPE,
+        token_type=CODEX_TOKEN_TYPE,
         summary={
-            "provider": OPENAI_SERVICE_NAME,
+            "provider": CODEX_SERVICE_NAME,
             "profile": profile_name,
             "oauth_base_url_hash": _base_url_hash(oauth_base_url),
             "client_id_source": client_id_source,
@@ -541,21 +544,27 @@ def refresh_chatenv_token(
     )
 
 
-def refresh_openai_profile_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
-    """Refresh ``OpenAI`` runtime token state through ChatEnv."""
+def refresh_codex_profile_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    """Refresh ``Codex`` runtime token state through ChatEnv."""
 
-    return refresh_runtime_token(OPENAI_SERVICE_NAME, profile, home=home)
+    return refresh_runtime_token(CODEX_SERVICE_NAME, profile, home=home)
+
+
+def refresh_openai_profile_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
+    """Compatibility alias for callers moving from ChatCRS 0.2.15."""
+
+    return refresh_codex_profile_token(profile=profile, home=home)
 
 
 def read_stored_token(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
     profile_name = normalize_token_profile(profile)
-    return _token_store(home).read(OPENAI_SERVICE_NAME, profile_name)
+    return _token_store(home).read(CODEX_SERVICE_NAME, profile_name)
 
 
 def token_status(*, profile: str = "default", home: str | Path | None = None) -> dict[str, Any]:
     profile_name = normalize_token_profile(profile)
-    status = _token_store(home).status(OPENAI_SERVICE_NAME, profile_name)
-    status["token_type"] = read_stored_token(profile=profile_name, home=home).get("token_type", OPENAI_OAUTH_TOKEN_TYPE)
+    status = _token_store(home).status(CODEX_SERVICE_NAME, profile_name)
+    status["token_type"] = read_stored_token(profile=profile_name, home=home).get("token_type", CODEX_TOKEN_TYPE)
     return status
 
 
@@ -567,17 +576,12 @@ def save_token_values(
     source: str = "import",
     home: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Compatibility helper that writes OpenAI tokens through TokenStore API.
-
-    New command-line workflows should prefer ``chatenv token import OpenAI`` or
-    ``chatenv token refresh OpenAI``. This function remains for Python callers
-    and tests; it never writes a Codex-specific service namespace.
-    """
+    """Write Codex OAuth tokens through the ChatEnv TokenStore API."""
 
     profile_name = normalize_token_profile(profile)
     account_id = values.get("account_id") if isinstance(values.get("account_id"), str) else ""
     summary = {
-        "provider": OPENAI_SERVICE_NAME,
+        "provider": CODEX_SERVICE_NAME,
         "profile": profile_name,
         "access_token_present": bool(values.get("access_token")),
         "refresh_token_present": bool(values.get("refresh_token")),
@@ -586,10 +590,10 @@ def save_token_values(
         "account_id_hash": _short_hash(account_id) if account_id else "",
     }
     return _token_store(home).write(
-        OPENAI_SERVICE_NAME,
+        CODEX_SERVICE_NAME,
         profile_name,
         values={key: value for key, value in values.items() if value},
-        token_type=OPENAI_OAUTH_TOKEN_TYPE,
+        token_type=CODEX_TOKEN_TYPE,
         summary=summary,
         expires_at=expires_at or "",
         source=source,
@@ -608,9 +612,9 @@ def _usable_access_from_payload(payload: dict[str, Any]) -> str:
     return token if isinstance(token, str) and token else ""
 
 
-def _usable_access_from_openai_profile(*, profile: str, home: str | Path | None = None) -> str:
+def _usable_access_from_codex_profile(*, profile: str, home: str | Path | None = None) -> str:
     try:
-        _profile_name, values = _load_openai_profile_values(profile, home=home)
+        _profile_name, values = _load_codex_profile_values(profile, home=home)
     except ValueError:
         return ""
     if _is_expired(values.get("OPENAI_ACCESS_TOKEN_EXPIRES_AT")):
@@ -638,19 +642,19 @@ def _resolve_access_token(
     if stored_access:
         return stored_access, None
 
-    configured_access = _usable_access_from_openai_profile(profile=profile_name, home=home)
+    configured_access = _usable_access_from_codex_profile(profile=profile_name, home=home)
     if configured_access:
         return configured_access, None
 
     if refresh:
-        refresh_status = refresh_openai_profile_token(profile=profile_name, home=home)
+        refresh_status = refresh_codex_profile_token(profile=profile_name, home=home)
         refreshed_payload = read_stored_token(profile=profile_name, home=home)
         refreshed_access = _usable_access_from_payload(refreshed_payload)
         if refreshed_access:
             return refreshed_access, refresh_status
     raise ValueError(
-        "OpenAI access token is required; use a registered ChatEnv OpenAI profile and run "
-        "`chatenv token refresh OpenAI <profile>` or pass --access-token for a one-off read."
+        "OpenAI access token is required; use a registered ChatEnv Codex profile and run "
+        "`chatenv token refresh Codex <profile>` or pass --access-token for a one-off read."
     )
 
 
@@ -811,7 +815,7 @@ def inspect_account(
     home: str | Path | None = None,
 ) -> dict[str, Any]:
     profile_name = _normalize_profile(profile)
-    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
+    profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -828,7 +832,7 @@ def inspect_account(
         stored_account_id=stored_account_id,
     )
     payload["profile"] = profile_name
-    payload["token_service"] = OPENAI_SERVICE_NAME
+    payload["token_service"] = CODEX_SERVICE_NAME
     payload["refresh"] = refresh_summary
     return payload
 
@@ -903,7 +907,7 @@ def inspect_usage(
     home: str | Path | None = None,
 ) -> dict[str, Any]:
     profile_name = _normalize_profile(profile)
-    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
+    profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -928,7 +932,7 @@ def inspect_usage(
         backend_base_url=_configured_backend_base_url(profile_values),
     )
     payload["profile"] = profile_name
-    payload["token_service"] = OPENAI_SERVICE_NAME
+    payload["token_service"] = CODEX_SERVICE_NAME
     payload["refresh"] = refresh_summary
     payload["account_resolution"] = account_resolution or {"source": "explicit", "account_id_hash": _short_hash(account_id)}
     return payload
@@ -948,7 +952,7 @@ def inspect_quota(
     """Run a profile-only Codex quota smoke through the responses endpoint."""
 
     profile_name = _normalize_profile(profile)
-    profile_values = _openai_profile_values_or_empty(profile=profile_name, home=home)
+    profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -974,7 +978,7 @@ def inspect_quota(
         backend_base_url=_configured_backend_base_url(profile_values),
     )
     payload["profile"] = profile_name
-    payload["token_service"] = OPENAI_SERVICE_NAME
+    payload["token_service"] = CODEX_SERVICE_NAME
     payload["refresh"] = refresh_summary
     payload["account_resolution"] = account_resolution or {"source": "explicit", "account_id_hash": _short_hash(account_id)}
     return payload
@@ -1003,6 +1007,7 @@ __all__ = [
     "inspect_usage",
     "read_stored_token",
     "refresh_access_token",
+    "refresh_codex_profile_token",
     "refresh_chatenv_token",
     "refresh_openai_profile_token",
     "save_token_values",

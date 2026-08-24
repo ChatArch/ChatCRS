@@ -446,11 +446,11 @@ def codex_group() -> None:
 
 @codex_group.group(name="token")
 def codex_token_group() -> None:
-    """Manage OpenAI OAuth tokens through the ChatEnv OpenAI token store."""
+    """Manage OpenAI OAuth tokens through the ChatEnv Codex token store."""
 
 
 @codex_token_group.command(name="status")
-@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
+@click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile under envs/Codex and tokens/Codex.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_token_status_command(profile: str, json_output: bool) -> None:
     """Show cached OpenAI OAuth token metadata without printing tokens."""
@@ -469,11 +469,11 @@ def codex_token_status_command(profile: str, json_output: bool) -> None:
 
 
 @codex_token_group.command(name="refresh")
-@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
+@click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile under envs/Codex and tokens/Codex.")
 @click.option("--refresh-token", default=None, help="OpenAI refresh token. Prefer token-store profile for real use.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
 @click.option("--timeout", type=float, default=20.0, show_default=True)
-@click.option("--save-token", is_flag=True, default=False, hidden=True, help="Deprecated compatibility flag; use `chatenv token refresh OpenAI <profile>`.")
+@click.option("--save-token", is_flag=True, default=False, hidden=True, help="Persist refreshed token values under tokens/Codex/<profile>.json.")
 @click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")
 def codex_token_refresh_command(
     profile: str,
@@ -485,14 +485,11 @@ def codex_token_refresh_command(
 ) -> None:
     """Refresh an OpenAI OAuth access token without printing token values.
 
-    Prefer `chatenv token refresh OpenAI <profile>` for durable token-store writes.
-    This command is kept as a one-off redacted OAuth smoke helper; `--save-token`
-    remains accepted as a hidden compatibility flag and writes the OpenAI token
-    service, never a Codex-specific namespace.
+    Prefer `chatenv token refresh Codex <profile>` for durable token-store writes.
     """
 
     try:
-        profile_values = codex_direct._openai_profile_values_or_empty(profile=profile)
+        profile_values = codex_direct._codex_profile_values_or_empty(profile=profile)
         if not refresh_token:
             values = codex_direct.read_stored_token(profile=profile).get("values", {})
             refresh_token = values.get("refresh_token") if isinstance(values, dict) else None
@@ -503,13 +500,13 @@ def codex_token_refresh_command(
             timeout=timeout,
         )
         output = dict(payload.get("safe") or {"ok": payload.get("ok"), "status": payload.get("status")})
-        output.update({"mutated": False, "profile": profile, "token_service": codex_direct.OPENAI_SERVICE_NAME})
+        output.update({"mutated": False, "profile": profile, "token_service": codex_direct.CODEX_SERVICE_NAME})
         if payload.get("ok") and save_token:
             status = codex_direct.save_token_values(
                 profile=profile,
                 values=payload.get("values", {}),
                 expires_at=payload.get("expires_at") or "",
-                source="compat-refresh",
+                source="refresh",
             )
             output.update({"mutated": True, "token_saved": status.get("token_present", False), "token_file": status.get("token_file")})
     except (OSError, ValueError) as exc:
@@ -524,7 +521,7 @@ def codex_token_refresh_command(
 
 
 @codex_group.command(name="account")
-@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
+@click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile under envs/Codex and tokens/Codex.")
 @click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
 @click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
@@ -550,8 +547,8 @@ def codex_account_command(profile: str, access_token: str | None, refresh: bool,
 
 
 @codex_group.command(name="quota")
-@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
-@click.option("--account-id", default=None, help="ChatGPT/Codex account id to smoke. If omitted, use the OpenAI token-store account mapping.")
+@click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile under envs/Codex and tokens/Codex.")
+@click.option("--account-id", default=None, help="ChatGPT/Codex account id to smoke. If omitted, use the Codex token-store account mapping.")
 @click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
 @click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")
@@ -596,8 +593,8 @@ def codex_quota_command(
 
 
 @codex_group.command(name="usage")
-@click.option("--profile", default="default", show_default=True, help="OpenAI ChatEnv profile under envs/OpenAI and tokens/OpenAI.")
-@click.option("--account-id", default=None, help="ChatGPT/Codex account id to inspect. If omitted, resolve the unique account for the OpenAI profile.")
+@click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile under envs/Codex and tokens/Codex.")
+@click.option("--account-id", default=None, help="ChatGPT/Codex account id to inspect. If omitted, resolve the unique account for the Codex profile.")
 @click.option("--access-token", default=None, help="OpenAI access token. Prefer token-store profile for real use.")
 @click.option("--refresh/--no-refresh", default=True, show_default=True, help="Use stored refresh token if no usable access token is available.")
 @click.option("--client-id", default=None, help="OpenAI OAuth client id. Defaults to the Codex app client id.")

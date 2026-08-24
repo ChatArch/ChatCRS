@@ -3,7 +3,7 @@ from pathlib import Path
 from chatstyle import render_click_tree
 
 from chatcrs.cli import main
-from chatcrs.config import ChatcrsConfig
+from chatcrs.config import ChatcrsConfig, CodexConfig
 
 
 EXPECTED_CLI_LEAVES = {
@@ -95,9 +95,9 @@ FORBIDDEN_PUBLIC_DOC_FRAGMENTS = (
     "CHATCRS_APP_DIR",
     "CHATCRS_CRS_COMMAND",
     "~/.chatarch/envs/Chatcrs",
-    "tokens/Codex",
-    "envs/Codex",
-    "Codex token profile",
+    "tokens/OpenAI",
+    "envs/OpenAI",
+    "chatenv token refresh OpenAI",
     "legacy.example.invalid",
     "/srv/legacy-crs",
     "through SSH",
@@ -209,3 +209,16 @@ def test_chatenv_provider_is_single_crs_http_namespace_without_ssh_fields():
         "CHATCRS_APP_DIR",
         "CHATCRS_CRS_COMMAND",
     } & env_keys
+
+
+def test_chatenv_provider_registers_independent_codex_oauth_namespace():
+    fields = CodexConfig.get_fields()
+    env_keys = {field.env_key for field in fields.values()}
+
+    assert CodexConfig._storage_dir == "Codex"
+    assert {
+        "OPENAI_REFRESH_TOKEN",
+        "OPENAI_OAUTH_BASE_URL",
+        "OPENAI_CODEX_CLIENT_ID",
+        "CHATGPT_BACKEND_BASE_URL",
+    }.issubset(env_keys)

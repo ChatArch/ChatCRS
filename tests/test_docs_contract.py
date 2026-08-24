@@ -51,6 +51,8 @@ def test_readmes_include_current_admin_token_tree():
         assert "chatcrs admin token refresh" in text
         assert "chatcrs admin token clear" in text
         assert "[--save-token]" in text
-        assert "tokens/Codex" not in text
-        assert "envs/Codex" not in text
-        assert "chatenv token refresh OpenAI default" in text
+        assert "tokens/Codex" in text
+        assert "envs/Codex" in text
+        assert "chatenv token refresh Codex default" in text
+        assert "tokens/OpenAI" not in text
+        assert "envs/OpenAI" not in text

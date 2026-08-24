@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2026-08-24 - 0.3.0
+
+### Changed
+
+- Move direct Codex OAuth profile and token storage to the ChatCRS-owned `Codex` ChatEnv namespace (`envs/Codex/<profile>.env` and `tokens/Codex/<profile>.json`) instead of ChatEnv's general `OpenAI` namespace.
+- Register the durable Codex OAuth refresher as `chatenv token refresh Codex <profile>` and keep `chatcrs.codex_direct` as the importable Python API behind `chatcrs codex ...`.
 
 ## 2026-08-21 - 0.2.15
 

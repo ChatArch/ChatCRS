@@ -30,7 +30,7 @@ chatcrs = "chatcrs.config"
 
 [project.entry-points."chatenv.token_refreshers"]
 CRS = "chatcrs.tokens:refresh_chatenv_token"
-OpenAI = "chatcrs.codex_direct:refresh_chatenv_token"
+Codex = "chatcrs.codex_direct:refresh_chatenv_token"
 
 [project.optional-dependencies]
 dev = ["build", "pytest", "twine"]
