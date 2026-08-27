@@ -1,4 +1,5 @@
 import json
+import base64
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,23 @@ from click.testing import CliRunner
 import chatenv.token_refreshers as chatenv_refreshers
 
 from chatcrs.cli import main
+
+
+def jwt_with_account(account_id: str, *, exp: int | None = None) -> str:
+    def encode(payload: dict) -> str:
+        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+        return encoded.rstrip("=")
+
+    claims = {"https://api.openai.com/auth": {"chatgpt_account_id": account_id, "chatgpt_plan_type": "pro"}}
+    if exp is not None:
+        claims["exp"] = exp
+    return ".".join(
+        [
+            encode({"alg": "RS256", "typ": "JWT"}),
+            encode(claims),
+            "signature",
+        ]
+    )
 
 
 class FakeCodexTransport:
@@ -137,6 +155,122 @@ def test_codex_chatenv_refresh_provider_prefers_rotated_token_store_refresh(monk
     assert result.values["account_label"] == "wzh"
     assert result.summary["account_id_present"] is True
     assert transport.calls[0]["data"]["refresh_token"] == "refresh-secret"
+
+
+def test_codex_chatenv_refresh_derives_account_id_from_access_token_claims(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(CodexConfig, "wzh", {"OPENAI_REFRESH_TOKEN": "refresh-secret"})
+
+    def refresh_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        assert url == "https://auth.openai.com/oauth/token"
+        assert data["refresh_token"] == "refresh-secret"
+        return 200, {"access_token": jwt_with_account("acct_123"), "expires_in": 3600}, {}
+
+    monkeypatch.setattr(codex_direct, "_request_json", refresh_transport)
+
+    result = codex_direct.refresh_chatenv_token(service="Codex", profile="wzh", home=home, env_store=env_store)
+
+    assert result.values["account_id"] == "acct_123"
+    assert result.values["refresh_token"] == "refresh-secret"
+    assert result.summary["account_id_present"] is True
+    assert result.summary["account_id_hash"] == "182d1cfdc619"
+    assert result.summary["refresh_token_source"] == "env_profile"
+    assert result.summary["refresh_fallback_attempts"] == 0
+    assert "acct_123" not in json.dumps(result.summary, ensure_ascii=False)
+    assert "refresh-secret" not in json.dumps(result.summary, ensure_ascii=False)
+
+
+def test_codex_chatenv_refresh_falls_back_to_env_refresh_token(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(CodexConfig, "wzh", {"OPENAI_REFRESH_TOKEN": "profile-refresh"})
+    TokenStore(home=home).write(
+        "Codex",
+        "wzh",
+        values={"refresh_token": "stale-token-store-refresh"},
+        token_type="openai_codex_oauth",
+        summary={"refresh_token_present": True},
+    )
+    seen_refresh_tokens = []
+
+    def refresh_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        assert url == "https://auth.openai.com/oauth/token"
+        seen_refresh_tokens.append(data["refresh_token"])
+        if data["refresh_token"] == "stale-token-store-refresh":
+            return 401, {"error": "invalid_grant"}, {}
+        assert data["refresh_token"] == "profile-refresh"
+        return 200, {"access_token": jwt_with_account("acct_123"), "expires_in": 3600}, {}
+
+    monkeypatch.setattr(codex_direct, "_request_json", refresh_transport)
+
+    result = codex_direct.refresh_chatenv_token(service="Codex", profile="wzh", home=home, env_store=env_store)
+
+    assert seen_refresh_tokens == ["stale-token-store-refresh", "profile-refresh"]
+    assert result.values["refresh_token"] == "profile-refresh"
+    assert result.values["account_id"] == "acct_123"
+    assert result.summary["refresh_token_source"] == "env_profile"
+    assert result.summary["refresh_fallback_attempts"] == 1
+    dumped_summary = json.dumps(result.summary, ensure_ascii=False)
+    assert "stale-token-store-refresh" not in dumped_summary
+    assert "profile-refresh" not in dumped_summary
+
+
+def test_codex_usage_auto_refreshes_expired_access_and_uses_claim_account_id(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(CodexConfig, "wzh", {"OPENAI_REFRESH_TOKEN": "refresh-secret"})
+    TokenStore(home=home).write(
+        "Codex",
+        "wzh",
+        values={"access_token": jwt_with_account("acct_123", exp=946684800), "refresh_token": "refresh-secret"},
+        token_type="openai_codex_oauth",
+        summary={"access_token_present": True, "refresh_token_present": True},
+    )
+    called_urls = []
+
+    def refresh_and_save(*, profile="default", home=None):
+        result = codex_direct.refresh_chatenv_token(service="Codex", profile=profile, home=home, env_store=env_store)
+        TokenStore(home=home).write(
+            "Codex",
+            profile,
+            values=result.values,
+            token_type=result.token_type,
+            summary=result.summary,
+            expires_at=result.expires_at,
+            source="refresh",
+        )
+        return {"source": "refresh", "token_present": True, "summary": result.summary}
+
+    def transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        called_urls.append(url)
+        if url == "https://auth.openai.com/oauth/token":
+            assert data["refresh_token"] == "refresh-secret"
+            return 200, {"access_token": jwt_with_account("acct_123"), "expires_in": 3600}, {}
+        if url == "https://chatgpt.com/backend-api/wham/usage":
+            assert headers["authorization"].startswith("Bearer ")
+            assert headers["ChatGPT-Account-ID"] == "acct_123"
+            return 200, {"summary": {"tokens": 42}}, {}
+        raise AssertionError(f"unexpected request {method} {url}")
+
+    monkeypatch.setattr(codex_direct, "refresh_codex_profile_token", refresh_and_save)
+    monkeypatch.setattr(codex_direct, "_request_json", transport)
+
+    payload = codex_direct.inspect_usage(profile="wzh", home=home, refresh=True)
+
+    assert payload["ok"] is True
+    assert payload["account_resolution"]["source"] == "token_store_account_id"
+    assert payload["account_id_hash"] == "182d1cfdc619"
+    assert called_urls == ["https://auth.openai.com/oauth/token", "https://chatgpt.com/backend-api/wham/usage"]
+    stored = json.loads((home / "tokens" / "Codex" / "wzh.json").read_text(encoding="utf-8"))
+    assert stored["values"]["account_id"] == "acct_123"
+    assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_chatenv_refresh_writes_codex_provider_result_without_openai_namespace(monkeypatch, tmp_path: Path):
@@ -334,6 +468,83 @@ def test_codex_usage_can_resolve_unique_account_from_profile(monkeypatch, tmp_pa
     called_urls = [call["url"] for call in transport.calls]
     assert called_urls == ["https://auth.openai.com/api/accounts", "https://chatgpt.com/backend-api/wham/usage"]
     assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_codex_usage_resolves_account_id_from_access_token_claims(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    TokenStore(home=home).write(
+        "Codex",
+        "wzh",
+        values={"access_token": jwt_with_account("acct_123")},
+        token_type="openai_codex_oauth",
+        summary={"access_token_present": True},
+    )
+    called_urls = []
+
+    def usage_only_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        called_urls.append(url)
+        assert url == "https://chatgpt.com/backend-api/wham/usage"
+        assert headers["ChatGPT-Account-ID"] == "acct_123"
+        return 200, {"summary": {"tokens": 42}}, {}
+
+    monkeypatch.setattr(codex_direct, "_request_json", usage_only_transport)
+
+    payload = codex_direct.inspect_usage(profile="wzh", home=home, refresh=False)
+
+    assert payload["ok"] is True
+    assert payload["account_resolution"] == {"source": "access_token_claims", "account_id_hash": "182d1cfdc619"}
+    assert called_urls == ["https://chatgpt.com/backend-api/wham/usage"]
+    assert "acct_123" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_codex_usage_refreshes_and_retries_after_unauthorized_response(monkeypatch, tmp_path: Path):
+    from chatcrs import codex_direct
+
+    home = tmp_path / "chatarch"
+    TokenStore(home=home).write(
+        "Codex",
+        "wzh",
+        values={"access_token": "revoked-access", "refresh_token": "refresh-secret", "account_id": "acct_123"},
+        token_type="openai_codex_oauth",
+        summary={"access_token_present": True, "refresh_token_present": True, "account_id_present": True},
+    )
+    usage_calls = 0
+
+    def refresh_and_save(*, profile="default", home=None):
+        TokenStore(home=home).write(
+            "Codex",
+            profile,
+            values={"access_token": jwt_with_account("acct_123"), "refresh_token": "refresh-secret", "account_id": "acct_123"},
+            token_type="openai_codex_oauth",
+            summary={"access_token_present": True, "refresh_token_present": True, "account_id_present": True},
+            expires_at="2099-01-01T00:00:00Z",
+            source="refresh",
+        )
+        return {"source": "refresh", "token_present": True}
+
+    def usage_transport(method, url, *, data=None, json_data=None, headers=None, timeout=20.0):
+        nonlocal usage_calls
+        assert url == "https://chatgpt.com/backend-api/wham/usage"
+        usage_calls += 1
+        if usage_calls == 1:
+            assert headers["authorization"] == "Bearer revoked-access"
+            return 401, {"error": "unauthorized"}, {}
+        assert headers["authorization"] != "Bearer revoked-access"
+        assert headers["ChatGPT-Account-ID"] == "acct_123"
+        return 200, {"summary": {"tokens": 42}}, {}
+
+    monkeypatch.setattr(codex_direct, "refresh_codex_profile_token", refresh_and_save)
+    monkeypatch.setattr(codex_direct, "_request_json", usage_transport)
+
+    payload = codex_direct.inspect_usage(profile="wzh", home=home, refresh=True)
+
+    assert usage_calls == 2
+    assert payload["ok"] is True
+    assert payload["refresh"] == {"source": "refresh", "token_present": True}
+    assert payload["account_resolution"]["source"] == "token_store_account_id"
+    assert "revoked-access" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_codex_usage_refuses_ambiguous_profile_accounts(monkeypatch, tmp_path: Path):
