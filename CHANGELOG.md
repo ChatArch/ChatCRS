@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-28 - 0.3.1
+
+### Fixed
+
+- Make Codex token refresh resilient for dashboard/API callers: detect expired JWT access-token claims even when token-store `expires_at` is missing, retry a 401 usage/quota probe with a forced ChatEnv refresh, fall back from a stale token-store refresh token to the stable `envs/Codex/<profile>.env` `OPENAI_REFRESH_TOKEN`, and derive `account_id` from access-token claims when the accounts API is unavailable.
+
 ## 2026-08-24 - 0.3.0
 
 ### Changed

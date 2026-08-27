@@ -72,6 +72,15 @@ def _is_expired(value: Any) -> bool:
     return expires_at is not None and expires_at <= _now()
 
 
+def _access_token_claims_expired(access_token: str) -> bool:
+    claims = _jwt_claims(access_token)
+    exp = claims.get("exp") if isinstance(claims, dict) else None
+    if exp is None:
+        return False
+    expires_at = _timestamp_to_iso(exp)
+    return bool(expires_at and _is_expired(expires_at))
+
+
 def _expires_at_from_expires_in(expires_in: Any) -> str:
     if expires_in is None:
         return ""
@@ -163,6 +172,15 @@ def _safe_hash_field(summary: dict[str, Any], name: str, value: Any) -> None:
         summary[f"{name}_present"] = True
 
 
+def _account_id_from_access_token_claims(access_token: str) -> str:
+    claims = _jwt_claims(access_token)
+    auth_claim = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else None
+    if not isinstance(auth_claim, dict):
+        return ""
+    account_id = auth_claim.get("chatgpt_account_id")
+    return account_id if isinstance(account_id, str) and account_id else ""
+
+
 def _account_summary_from_token_claims(access_token: str, *, stored_account_id: str = "") -> dict[str, Any]:
     claims = _jwt_claims(access_token)
     auth_claim = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else None
@@ -174,7 +192,7 @@ def _account_summary_from_token_claims(access_token: str, *, stored_account_id: 
         "claims_present": bool(claims),
         "auth_claim_present": bool(auth_claim),
     }
-    account_id = auth_claim.get("chatgpt_account_id")
+    account_id = _account_id_from_access_token_claims(access_token)
     if isinstance(account_id, str) and account_id:
         summary["account_id_hash"] = _short_hash(account_id)
         summary["account_id_present"] = True
@@ -503,20 +521,35 @@ def refresh_chatenv_token(
     profile_name, values = _load_codex_profile_values(profile, home=home, env_store=env_store)
     store = token_store or TokenStore(home=home)
     existing_values = _token_values(store.read(CODEX_SERVICE_NAME, profile_name))
-    refresh_token = existing_values.get("refresh_token") or values.get("OPENAI_REFRESH_TOKEN")
-    if not isinstance(refresh_token, str) or not refresh_token:
+    existing_refresh_token = existing_values.get("refresh_token")
+    profile_refresh_token = values.get("OPENAI_REFRESH_TOKEN")
+    refresh_candidates: list[tuple[str, str]] = []
+    for source, token in (("token_store", existing_refresh_token), ("env_profile", profile_refresh_token)):
+        if isinstance(token, str) and token and token not in {candidate for _source, candidate in refresh_candidates}:
+            refresh_candidates.append((source, token))
+    if not refresh_candidates:
         raise ValueError(f"Codex ChatEnv profile {profile_name} is missing OPENAI_REFRESH_TOKEN")
 
     oauth_base_url = values.get("OPENAI_OAUTH_BASE_URL") or AUTH_BASE_URL
     client_id, client_id_source = _configured_client_id(values)
-    refreshed = refresh_access_token(
-        refresh_token=refresh_token,
-        client_id=client_id,
-        oauth_base_url=oauth_base_url,
-        timeout=20.0,
-    )
+    refreshed: dict[str, Any] = {}
+    refresh_token_source = ""
+    failed_sources: list[dict[str, Any]] = []
+    for candidate_source, refresh_token in refresh_candidates:
+        refreshed = refresh_access_token(
+            refresh_token=refresh_token,
+            client_id=client_id,
+            oauth_base_url=oauth_base_url,
+            timeout=20.0,
+        )
+        if refreshed.get("ok"):
+            refresh_token_source = candidate_source
+            break
+        failed_sources.append({"source": candidate_source, "status": refreshed.get("status")})
     if not refreshed.get("ok"):
-        raise ValueError(f"OpenAI OAuth refresh failed: status={refreshed.get('status')}")
+        status = failed_sources[-1]["status"] if failed_sources else refreshed.get("status")
+        attempted = ",".join(item["source"] for item in failed_sources) or "none"
+        raise ValueError(f"OpenAI OAuth refresh failed: status={status}; attempted_sources={attempted}")
     refreshed_values = dict(refreshed.get("values") or {})
     if "refresh_token" not in refreshed_values:
         refreshed_values["refresh_token"] = refresh_token
@@ -524,6 +557,9 @@ def refresh_chatenv_token(
         metadata_value = existing_values.get(metadata_key)
         if metadata_value and metadata_key not in refreshed_values:
             refreshed_values[metadata_key] = metadata_value
+    account_id_from_claims = _account_id_from_access_token_claims(str(refreshed_values.get("access_token") or ""))
+    if account_id_from_claims and not refreshed_values.get("account_id"):
+        refreshed_values["account_id"] = account_id_from_claims
     account_id = refreshed_values.get("account_id")
     return TokenRefreshResult(
         values={key: value for key, value in refreshed_values.items() if value},
@@ -533,6 +569,8 @@ def refresh_chatenv_token(
             "profile": profile_name,
             "oauth_base_url_hash": _base_url_hash(oauth_base_url),
             "client_id_source": client_id_source,
+            "refresh_token_source": refresh_token_source,
+            "refresh_fallback_attempts": len(failed_sources),
             "access_token_present": bool(refreshed_values.get("access_token")),
             "refresh_token_present": bool(refreshed_values.get("refresh_token")),
             "refresh_token_rotated": bool(refreshed.get("refresh_token_rotated")),
@@ -606,10 +644,12 @@ def _stored_values(*, profile: str = "default", home: str | Path | None = None) 
 
 
 def _usable_access_from_payload(payload: dict[str, Any]) -> str:
-    if _is_expired(payload.get("expires_at")):
-        return ""
     token = _token_values(payload).get("access_token")
-    return token if isinstance(token, str) and token else ""
+    if not isinstance(token, str) or not token:
+        return ""
+    if _is_expired(payload.get("expires_at")) or _access_token_claims_expired(token):
+        return ""
+    return token
 
 
 def _usable_access_from_codex_profile(*, profile: str, home: str | Path | None = None) -> str:
@@ -617,10 +657,12 @@ def _usable_access_from_codex_profile(*, profile: str, home: str | Path | None =
         _profile_name, values = _load_codex_profile_values(profile, home=home)
     except ValueError:
         return ""
-    if _is_expired(values.get("OPENAI_ACCESS_TOKEN_EXPIRES_AT")):
-        return ""
     token = values.get("OPENAI_ACCESS_TOKEN")
-    return token if isinstance(token, str) and token else ""
+    if not isinstance(token, str) or not token:
+        return ""
+    if _is_expired(values.get("OPENAI_ACCESS_TOKEN_EXPIRES_AT")) or _access_token_claims_expired(token):
+        return ""
+    return token
 
 
 def _resolve_access_token(
@@ -655,6 +697,19 @@ def _resolve_access_token(
     raise ValueError(
         "OpenAI access token is required; use a registered ChatEnv Codex profile and run "
         "`chatenv token refresh Codex <profile>` or pass --access-token for a one-off read."
+    )
+
+
+def _refresh_and_read_access_token(*, profile: str, home: str | Path | None = None) -> tuple[str, dict[str, Any]]:
+    profile_name = normalize_token_profile(profile)
+    refresh_status = refresh_codex_profile_token(profile=profile_name, home=home)
+    refreshed_payload = read_stored_token(profile=profile_name, home=home)
+    refreshed_access = _usable_access_from_payload(refreshed_payload)
+    if refreshed_access:
+        return refreshed_access, refresh_status
+    raise ValueError(
+        "OpenAI access token refresh did not produce a usable access token for "
+        f"Codex profile {profile_name}"
     )
 
 
@@ -873,6 +928,12 @@ def _resolve_account_id_from_profile(
             "source": "token_store_account_id",
             "account_id_hash": _short_hash(stored_account_id),
         }
+    claim_account_id = _account_id_from_access_token_claims(access_token)
+    if claim_account_id:
+        return claim_account_id, {
+            "source": "access_token_claims",
+            "account_id_hash": _short_hash(claim_account_id),
+        }
     _accounts_url_value, status, _parsed, accounts = _fetch_accounts(
         access_token=access_token,
         timeout=timeout,
@@ -908,6 +969,7 @@ def inspect_usage(
 ) -> dict[str, Any]:
     profile_name = _normalize_profile(profile)
     profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
+    explicit_account_id = account_id
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -931,6 +993,22 @@ def inspect_usage(
         timeout=timeout,
         backend_base_url=_configured_backend_base_url(profile_values),
     )
+    if refresh and access_token is None and refresh_summary is None and payload.get("status") == 401:
+        token, refresh_summary = _refresh_and_read_access_token(profile=profile_name, home=home)
+        if not explicit_account_id:
+            account_id, account_resolution = _resolve_account_id_from_profile(
+                profile=profile_name,
+                access_token=token,
+                timeout=timeout,
+                home=home,
+                auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+            )
+        payload = get_usage(
+            access_token=token,
+            account_id=account_id,
+            timeout=timeout,
+            backend_base_url=_configured_backend_base_url(profile_values),
+        )
     payload["profile"] = profile_name
     payload["token_service"] = CODEX_SERVICE_NAME
     payload["refresh"] = refresh_summary
@@ -953,6 +1031,7 @@ def inspect_quota(
 
     profile_name = _normalize_profile(profile)
     profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
+    explicit_account_id = account_id
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -977,6 +1056,23 @@ def inspect_quota(
         timeout=timeout,
         backend_base_url=_configured_backend_base_url(profile_values),
     )
+    if refresh and access_token is None and refresh_summary is None and payload.get("status") == 401:
+        token, refresh_summary = _refresh_and_read_access_token(profile=profile_name, home=home)
+        if not explicit_account_id:
+            account_id, account_resolution = _resolve_account_id_from_profile(
+                profile=profile_name,
+                access_token=token,
+                timeout=timeout,
+                home=home,
+                auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+            )
+        payload = get_quota(
+            access_token=token,
+            account_id=account_id,
+            model=model,
+            timeout=timeout,
+            backend_base_url=_configured_backend_base_url(profile_values),
+        )
     payload["profile"] = profile_name
     payload["token_service"] = CODEX_SERVICE_NAME
     payload["refresh"] = refresh_summary
