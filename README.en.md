@@ -37,6 +37,11 @@ python -m mkdocs serve
 
 Documentation: https://arch.gh.wzhecnu.cn/ChatCRS/
 
+## Configuration test
+
+After installation, import `CRS_API_BASE` (service root URL) and `CRS_API_KEY` with `chatenv paste --stdin --profile smoke -I --yes`, then run `chatenv use smoke -t crs -I` and `chatenv test -t crs -I`.
+The default checks key authentication only and explicitly does not verify upstream availability. Set optional `CRS_API_MODEL` to opt into one billable Codex Responses text request using the same key, typed input, `stream=true`, and `store=false`. A completed response with nonempty text is required. Failures exit nonzero without printing credentials or raw errors. See [configuration details](docs/configuration.md).
+
 ## CLI tree
 
 ```text
