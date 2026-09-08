@@ -22,6 +22,8 @@ EXPECTED_CLI_LEAVES = {
     "chatcrs codex account",
     "chatcrs codex quota",
     "chatcrs codex usage",
+    "chatcrs codex reset list",
+    "chatcrs codex reset consume",
     "chatcrs service install",
     "chatcrs service update",
     "chatcrs service start",

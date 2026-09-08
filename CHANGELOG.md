@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-09 - 0.3.3
+
+### Added
+
+- Add banked Codex reset list/consume CLI and reusable non-refreshing `CodexResetClient` for dashboard consumers.
+- Support explicit reset-backend override while preserving the profile usage base.
+- Require execute + persistent request ID, persist safe receipts before consumption, forbid duplicate-ID sends, and verify with GET readback.
+- Bound HTTP reads, reject credential-bearing URLs and redirects, and keep raw identities and response bodies out of summaries.
+
+
 ## 2026-09-08 - 0.3.2
 
 ### Added
