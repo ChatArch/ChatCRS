@@ -122,3 +122,20 @@ The canonical CRS ChatEnv namespace is `CRS`; stable CRS configuration lives in 
 - HTTP/Admin commands must name the endpoint.
 - Service commands must remain server-local and explicit about `local_command` execution.
 - Keep all outputs redacted: API keys, tokens, passwords, and OAuth credentials are reported only as presence, counts, status, or `[REDACTED]`.
+
+
+## Banked Codex resets
+
+`chatcrs codex reset list` reads available count and expirations with `GET /wham/rate-limit-reset-credits`, without model generation or OAuth refresh. `chatcrs codex reset consume` is a dry-run unless both a persistent `--request-id` and `--execute` are provided. It persists an audit before sending and performs GET readback afterward. The same request ID is never sent twice; resolve uncertain outcomes through read-only inspection instead of creating another ID. A full reset changes the natural reset schedule and is not a Credits purchase.
+
+```bash
+chatcrs codex reset list --profile work --json-output
+chatcrs codex reset consume --profile work --request-id one-reviewed-operation --json-output
+```
+
+An explicit `--base-url` can select a reset backend when a configured relay does not expose reset routes; it does not change the profile usage/auth base or stored config. These are evolving ChatGPT backend endpoints, not a stable public OpenAI Platform API. Python consumers use `chatcrs.reset_credits.CodexResetClient`, `inspect_reset_credits`, and `consume_reset_credit`. Client `consume(..., execute=True)` requires caller-owned policy and durable de-duplication; ChatGlance threshold policy stays outside ChatCRS.
+
+| CLI | HTTP | Python API |
+|---|---|---|
+| `chatcrs codex reset list` | `GET /wham/rate-limit-reset-credits` | `inspect_reset_credits` |
+| `chatcrs codex reset consume` | `POST /wham/rate-limit-reset-credits/consume`; GET readback | `consume_reset_credit` |

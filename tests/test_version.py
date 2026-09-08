@@ -2,7 +2,7 @@ from chatcrs import __version__
 
 
 def test_version_present():
-    assert __version__ == "0.3.2"
+    assert __version__ == "0.3.3"
 
 
 def test_shared_runtime_dependencies_and_refresh_provider_entry_point_declared():

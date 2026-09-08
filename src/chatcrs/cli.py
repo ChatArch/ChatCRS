@@ -444,6 +444,47 @@ def codex_group() -> None:
     """Direct OpenAI Codex account token and usage helpers."""
 
 
+@codex_group.group(name="reset")
+def codex_reset_group() -> None:
+    """Inspect or explicitly redeem banked Codex resets without model requests."""
+
+
+def _reset_options(function):
+    function = click.option("--profile", default="default", show_default=True, help="Codex ChatEnv profile.")(function)
+    function = click.option("--base-url", default=None, help="Explicit reset backend base; usage keeps the selected profile base.")(function)
+    function = click.option("--timeout", default=20.0, type=click.FloatRange(min=0.1), show_default=True)(function)
+    function = click.option("--json-output", is_flag=True, help="Render safe structured JSON.")(function)
+    return function
+
+
+@codex_reset_group.command("list")
+@_reset_options
+def codex_reset_list(profile: str, base_url: str | None, timeout: float, json_output: bool) -> None:
+    """Read available reset count and expirations; never refresh credentials."""
+    from chatcrs.reset_credits import SafeResetError, inspect_reset_credits
+    try:
+        payload = inspect_reset_credits(profile=profile, reset_base_url=base_url, timeout=timeout)
+    except (SafeResetError, ValueError, OSError):
+        raise click.ClickException("Reset query failed; verify the profile, credentials and backend route.") from None
+    _echo_json(payload) if json_output else click.echo(f"Available resets: {payload['available_count']}")
+
+
+@codex_reset_group.command("consume")
+@_reset_options
+@click.option("--request-id", required=True, help="Persistent idempotency id for this one operation; never rotate it after an uncertain result.")
+@click.option("--execute", is_flag=True, help="Actually consume one banked reset; otherwise only print a plan.")
+def codex_reset_consume(profile: str, base_url: str | None, timeout: float, json_output: bool, request_id: str, execute: bool) -> None:
+    """Plan or redeem one reset with a persisted receipt and GET readback."""
+    from chatcrs.reset_credits import SafeResetError, consume_reset_credit
+    try:
+        payload = consume_reset_credit(profile=profile, request_id=request_id, reset_base_url=base_url, timeout=timeout, execute=execute)
+    except (SafeResetError, ValueError, OSError):
+        raise click.ClickException("Reset operation failed safely; inspect the audit before any retry.") from None
+    _echo_json(payload) if json_output else click.echo(payload.get("state", payload.get("code")))
+    if not payload.get("ok"):
+        raise click.exceptions.Exit(1)
+
+
 @codex_group.group(name="token")
 def codex_token_group() -> None:
     """Manage OpenAI OAuth tokens through the ChatEnv Codex token store."""

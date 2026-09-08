@@ -65,6 +65,9 @@ chatcrs
 ├── codex  # Direct OpenAI Codex account token and usage helpers.
 │   ├── account [--profile PROFILE] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Read a safe OpenAI Codex account summary from token claims and API probe.
 │   ├── quota [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--model MODEL] [--timeout TIMEOUT] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
+│   ├── reset  # Inspect or explicitly redeem banked Codex resets without model requests.
+│   │   ├── consume [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE] [--request-id REQUEST-ID] [--execute]  # Plan or redeem one reset with a persisted receipt and GET readback.
+│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read available reset count and expirations; never refresh credentials.
 │   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv Codex token store.
 │   │   ├── refresh [--profile PROFILE] [--refresh-token REFRESH-TOKEN] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   │   └── status [--profile PROFILE] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
@@ -150,3 +153,15 @@ Service-local 目标不进入第二套 ChatEnv namespace；用当前工作目录
 - `docs/interfaces.md`
 - `docs/configuration.md`
 - `docs/production-maintenance.md`
+
+
+## Codex 重置卡
+
+`chatcrs codex reset list` 通过 `GET /wham/rate-limit-reset-credits` 查询可用次数与到期时间；不请求模型、不刷新 OAuth。`chatcrs codex reset consume` 默认只生成计划，必须同时提供持久化的 `--request-id` 和 `--execute` 才消费一张卡。请求前保存审计，之后 GET 读回；相同请求 ID 不重复发送，结果不明应人工核对，不要生成新 ID 盲重试。完整重置会改变自然重置时间，且不是购买 Credits。
+
+```bash
+chatcrs codex reset list --profile work --json-output
+chatcrs codex reset consume --profile work --request-id one-reviewed-operation --json-output
+```
+
+如既有反代未提供重置路由，可用 `--base-url` 显式指定重置后端；它不改变该 profile 的 usage/auth base，也不会修改配置。服务使用 ChatGPT 后端接口，可能随上游变化，不等同于稳定的 OpenAI Platform 公共 API。Python 消费者使用 `chatcrs.reset_credits.CodexResetClient`、`inspect_reset_credits` 与 `consume_reset_credit`；客户端 `consume(..., execute=True)` 由调用者自己的策略和持久化去重保护。ChatGlance 的阈值策略不属于 ChatCRS。
