@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-08 - 0.3.2
+
+### Added
+
+- Make `chatenv test -t crs -I` authenticate the active CRS profile's API key through `/openai/key-info`, with safe nonzero failures and no admin-token loading or refresh.
+- Register optional `CRS_API_MODEL`: when explicitly configured, verify completed text via the same key and `/openai/responses` using typed input, streaming, and `store=false`. Without a model, report key-only verification and explicitly leave upstream availability unverified. Codex OAuth lifecycle remains unchanged.
+
 ## 2026-08-28 - 0.3.1
 
 ### Fixed

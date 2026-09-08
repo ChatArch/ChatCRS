@@ -37,6 +37,11 @@ python -m mkdocs serve
 
 线上文档：https://arch.gh.wzhecnu.cn/ChatCRS/
 
+## 配置测试
+
+安装后用 `chatenv paste --stdin --profile smoke -I --yes` 导入 `CRS_API_BASE`（服务根 URL）与 `CRS_API_KEY`，再 `chatenv use smoke -t crs -I`、`chatenv test -t crs -I`。
+默认只验证 Key 鉴权，明确不证明上游可用；显式配置可选 `CRS_API_MODEL` 后才发起同 Key 的 Codex Responses 流式文本请求（会产生用量）。失败非零，不打印凭据或原始错误。详见[配置文档](docs/configuration.md)。
+
 ## CLI 树
 
 ```text

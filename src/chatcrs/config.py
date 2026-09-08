@@ -12,10 +12,47 @@ class ChatcrsConfig(BaseEnvConfig):
 
     @classmethod
     def test(cls) -> None:
-        """Validate schema registration without external side effects."""
+        """Authenticate the active CRS key; optionally smoke its model route."""
+        import click
+        from chatenv import EnvStore, get_paths
 
-        print(f"Testing {cls._title}...")
-        print("Schema loaded; no network test is required.")
+        from chatcrs.remote import CrsHttpClient, CrsProfile
+
+        # ChatEnv 0.2.x test dispatch does not load fields. Honor its --home
+        # override without resolving ChatCRS's unrelated default admin profile.
+        ctx = click.get_current_context(silent=True)
+        home = ctx.find_root().params.get("home") if ctx else None
+        stage = "configuration"
+        try:
+            cls.load_from_sources(EnvStore(get_paths(home).envs_dir).load_active(cls))
+            base = str(cls.CRS_API_BASE.value or "").strip().rstrip("/")
+            key = str(cls.CRS_API_KEY.value or "").strip()
+            model = str(cls.CRS_API_MODEL.value or "").strip()
+            for name, value in (("CRS_API_BASE", base), ("CRS_API_KEY", key)):
+                if not value:
+                    raise click.ClickException(f"CRS test requires {name}.")
+            client = CrsHttpClient(
+                CrsProfile(base_url=base, api_key=key),
+                home=home, explicit_admin_token=True,
+            )
+            stage = "key authentication"
+            result = client.key_info()
+            info = result["key_info"]
+            if (not result["ok"] or not isinstance(info, dict) or not info
+                    or info.get("success") is False or info.get("error") or "raw" in info):
+                raise click.ClickException("CRS key authentication failed; check CRS_API_BASE / CRS_API_KEY.")
+            print("Key authentication succeeded.")
+            if not model:
+                print("CRS_API_MODEL is unset: key-only verification; upstream not tested.")
+                return
+            stage = "Codex Responses text test"
+            client.responses_smoke(model=model)
+            print("Codex Responses text test succeeded.")
+        except click.ClickException:
+            raise
+        except Exception:
+            # Never render exception text, URLs, response bodies, or credentials.
+            raise click.ClickException(f"CRS {stage} failed; check configuration and service availability.") from None
 
     CRS_API_BASE = EnvField(
         "CRS_API_BASE",
@@ -26,6 +63,11 @@ class ChatcrsConfig(BaseEnvConfig):
         "CRS_API_KEY",
         desc="CRS API key for key-only self inspection",
         is_sensitive=True,
+    )
+
+    CRS_API_MODEL = EnvField(
+        "CRS_API_MODEL",
+        desc="Optional Codex model for chatenv test; unset verifies only CRS key authentication",
     )
 
     CRS_USERNAME = EnvField(

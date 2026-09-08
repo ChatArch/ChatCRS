@@ -337,6 +337,61 @@ class CrsHttpClient:
             "key_info": redact(parsed),
         }
 
+    def responses_smoke(self, *, model: str) -> dict[str, Any]:
+        """Verify completed text from CRS's Codex route using only this API key.
+
+        One request, no retry/refresh. Read at most 64 KiB of SSE and retain no
+        generated text in the result. HTTP/socket errors propagate to callers.
+        """
+        if not model or not self.profile.api_key:
+            raise ValueError("CRS API key and explicit model are required")
+        payload = {
+            "model": model,
+            "input": [{"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": "Reply OK."},
+            ]}],
+            "stream": True,
+            "store": False,
+        }
+        request = urllib.request.Request(
+            f"{self.profile.base_url.rstrip('/')}/openai/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "authorization": f"Bearer {self.profile.api_key}",
+                "content-type": "application/json",
+                "accept": "text/event-stream",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            if response.status != 200 or "text/event-stream" not in response.headers.get("content-type", ""):
+                raise CrsApiError("CRS Responses did not return an SSE stream")
+            remaining = 65536
+            has_text = False
+            data: list[str] = []
+            while remaining > 0:
+                line = response.readline(remaining + 1)
+                remaining -= len(line)
+                if not line or remaining < 0:
+                    break
+                value = line.decode("utf-8").rstrip("\r\n")
+                if value.startswith("data:"):
+                    data.append(value[5:].lstrip(" "))
+                elif not value and data:
+                    event = json.loads("\n".join(data))
+                    data.clear()
+                    kind = event.get("type")
+                    if kind in {"error", "response.failed", "response.incomplete"} or event.get("error"):
+                        raise CrsApiError("CRS Responses stream failed")
+                    if kind == "response.output_text.delta":
+                        has_text = has_text or bool(event.get("delta", "").strip())
+                    if kind == "response.completed":
+                        result = event.get("response", {})
+                        if result.get("status") == "completed" and has_text and not result.get("error"):
+                            return {"ok": True, "status": response.status, "text_received": True}
+                        break
+        raise CrsApiError("CRS Responses did not complete with text within the stream limit")
+
 
 def client_from_options(
     *,

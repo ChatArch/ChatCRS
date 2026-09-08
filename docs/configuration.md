@@ -13,6 +13,36 @@ ChatCRS 使用一套 canonical CRS ChatEnv namespace。默认 profile 是 `admin
 | admin username | CRS 管理员用户名 | 是 |
 | admin password | CRS 管理员密码 | 是 |
 
+## CRS Key / 可选模型网络验证
+
+安装 ChatCRS 后，通过注册的 `crs`（或 `chatcrs`）target 测试，而不是另写 HTTP 脚本：
+
+```bash
+chatenv paste --stdin --profile smoke -I --yes
+# 在 stdin 输入 CRS_API_BASE=<CRS 服务根 URL>、CRS_API_KEY=<你的 Key> 后结束输入。
+chatenv use smoke -t crs -I
+chatenv test -t crs -I
+
+# 可选：显式选择此 Key 可路由的 Codex 模型（会产生一次模型请求/用量）。
+chatenv set 'CRS_API_MODEL=<可用模型名>' -I
+chatenv test -t crs -I
+# 恢复只验证 Key：
+chatenv set CRS_API_MODEL= -I
+```
+
+`CRS_API_BASE` 是服务根 URL（例如 `https://crs.example.com`），不要附加 `/openai` 或 `/v1`。
+测试读取 ChatEnv 当前激活的 CRS profile；支持 `CHATARCH_HOME` / `chatenv --home` 隔离。
+字段优先级为当前 profile > 进程环境 > schema 默认值；空字符串不会回退环境。
+这与 `chatcrs ... --profile admin` 的默认命名 profile 选择不同，不会自动使用 `admin`。
+
+- 必需 `CRS_API_BASE`、`CRS_API_KEY`；调用已有 `CrsHttpClient.key_info()`，GET `/openai/key-info` 验证鉴权，不读取/刷新 admin token，不调用管理员登录。
+- **未设置 `CRS_API_MODEL`**：明确输出 `key-only verification; upstream not tested`。Key 鉴权成功不代表上游账号、路由或模型可用。
+- **显式设置 `CRS_API_MODEL`**：同一个 Key 再请求 POST `/openai/responses`；typed message/input_text 输入 `Reply OK.`，`stream=true`、`store=false`。收到非空文本 delta 和成功的 `response.completed` 才算通过，不以 HTTP 200 或 SSE 开始作为成功。
+- 每次请求 socket timeout 20 秒，无自动重试；模型 SSE 最多读取 64 KiB。截断、超限、空文本、错误事件、HTTP/网络错误均失败，命令非零退出；不打印 Key、响应正文、生成文本或原始异常。
+- 此测试仅覆盖 CRS Key 与可选 Codex 路由，不修改 `CodexConfig.test` / OAuth token 生命周期，不验证其它 provider。
+
+可复用 Python 接口：`ChatcrsConfig.test()` 读取当前 ChatEnv 配置并报告结果；`CrsHttpClient.responses_smoke(model=...)` 返回安全的 `ok/status/text_received` 结果，失败抛出异常。
+
 ## Runtime token store
 
 短期 CRS Admin session token 不再作为主要配置写入 Env。ChatCRS 会使用与 Env profile 平行的 token store；安装 ChatCRS 后也会注册 ChatEnv refresh provider，因此既可以运行 `chatcrs admin token refresh --profile <profile>`，也可以运行 `chatenv token refresh CRS <profile>`：
