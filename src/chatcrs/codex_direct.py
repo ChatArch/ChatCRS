@@ -13,6 +13,8 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from chatcrs.http import open_request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -305,7 +307,7 @@ def _request_json(
         request_headers["content-type"] = "application/x-www-form-urlencoded"
     request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with open_request(request, timeout=timeout) as response:
             response_body = response.read()
             status = response.status
             response_headers = dict(response.headers.items())

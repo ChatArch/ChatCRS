@@ -6,6 +6,8 @@ import json
 import os
 import urllib.error
 import urllib.request
+
+from chatcrs.http import open_request
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -165,7 +167,7 @@ class CrsHttpClient:
             method=method,
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with open_request(request, timeout=self.timeout) as response:
                 response_body = response.read()
                 status = response.status
         except urllib.error.HTTPError as exc:
@@ -363,7 +365,7 @@ class CrsHttpClient:
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+        with open_request(request, timeout=self.timeout) as response:
             if response.status != 200 or "text/event-stream" not in response.headers.get("content-type", ""):
                 raise CrsApiError("CRS Responses did not return an SSE stream")
             remaining = 65536

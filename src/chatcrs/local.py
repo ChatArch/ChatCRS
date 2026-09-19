@@ -9,9 +9,7 @@ from typing import Any
 DEFAULT_BASE_URL = "http://127.0.0.1:12390"
 
 
-class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+from chatcrs.http import NoRedirectHandler, open_request
 
 
 def normalize_base_url(base_url: str | None = None) -> str:
@@ -28,10 +26,9 @@ def _request_status(
     headers: dict[str, str] | None = None,
     timeout: float = 10,
 ) -> tuple[int, bytes]:
-    opener = urllib.request.build_opener(NoRedirectHandler)
     request = urllib.request.Request(f"{base_url}{path}", data=body, method=method, headers=headers or {})
     try:
-        with opener.open(request, timeout=timeout) as response:
+        with open_request(request, timeout=timeout) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()

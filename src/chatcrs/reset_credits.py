@@ -33,9 +33,7 @@ class SafeResetError(RuntimeError):
         super().__init__(f'Codex reset request failed: status={status} code={self.code}')
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+from chatcrs.http import open_request
 
 
 def _base(value: str) -> str:
@@ -52,9 +50,8 @@ def _hash(value: str) -> str:
 def _http(method: str, url: str, headers: dict, body: dict | None, timeout: float) -> tuple[int, Any]:
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
-    opener = urllib.request.build_opener(_NoRedirect)
     try:
-        with opener.open(request, timeout=timeout) as response:
+        with open_request(request, timeout=timeout) as response:
             status, raw = response.status, response.read(MAX_RESPONSE_BYTES + 1)
     except urllib.error.HTTPError as exc:
         status, raw = exc.code, exc.read(MAX_RESPONSE_BYTES + 1)
