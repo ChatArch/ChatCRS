@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-20 - 0.3.4
+
+### Fixed
+
+- Make all ChatCRS HTTP transports ignore environment and system proxies and reject redirects, preserving the selected Base URL for JSON, streaming, OAuth and reset operations.
+- Renew profile-backed reset credentials through the registered ChatEnv Codex refresher before expired-token requests; permit one refresh/retry for read-only GET 401 responses, never for a consume POST.
+- Preserve account identity and configured endpoints across renewal, persist rotated tokens only in the runtime token store, and retain a read-only `refresh=False` Python mode.
+- Keep OAuth failure output sanitized and preserve persisted request IDs, pending receipts and post-consumption readback.
+- Add a token-free Nginx example with exact usage, response, card and OAuth paths, upstream TLS verification, method guards and no POST replay.
+
 ## 2026-09-09 - 0.3.3
 
 ### Added

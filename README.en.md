@@ -67,7 +67,7 @@ chatcrs
 │   ├── quota [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--model MODEL] [--timeout TIMEOUT] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   ├── reset  # Inspect or explicitly redeem banked Codex resets without model requests.
 │   │   ├── consume [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE] [--request-id REQUEST-ID] [--execute]  # Plan or redeem one reset with a persisted receipt and GET readback.
-│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read available reset count and expirations; never refresh credentials.
+│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read reset count and expirations; renew profile credentials when required.
 │   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv Codex token store.
 │   │   ├── refresh [--profile PROFILE] [--refresh-token REFRESH-TOKEN] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   │   └── status [--profile PROFILE] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
@@ -157,7 +157,19 @@ See:
 
 ## Banked Codex resets
 
-`chatcrs codex reset list` reads available count and expirations with `GET /wham/rate-limit-reset-credits`, without model generation or OAuth refresh. `chatcrs codex reset consume` is a dry-run unless both a persistent `--request-id` and `--execute` are provided. It persists an audit before sending and performs GET readback afterward. The same request ID is never sent twice; resolve uncertain outcomes through read-only inspection instead of creating another ID. A full reset changes the natural reset schedule and is not a Credits purchase.
+Profile clients use the registered ChatEnv `Codex` renewal flow: stable configuration stays in `envs/Codex`, while rotated access/refresh tokens and expiry metadata are written only to `tokens/Codex`, without changing ENV. Expired credentials are renewed before use. A read-only GET 401 permits one renewal/retry; a consume POST is never replayed. Rejected refresh credentials require renewed authorization, not another proxy or a copied token from a different service.
+
+Configure the HTTPS Base URLs needed by the account operation. All ChatCRS HTTP transports ignore environment/system proxies and reject redirects. The repository provides `infra/nginx/codex-relay.conf.example`; the reverse proxy forwards requests without storing account secrets.
+
+```env
+OPENAI_OAUTH_BASE_URL=https://auth-relay.example.com
+CHATGPT_BACKEND_BASE_URL=https://gpt-relay.example.com/backend-api
+```
+
+Python consumers use `CodexResetClient.from_profile("work", refresh=True)`. Set `refresh=False` explicitly for diagnostics that must not renew credentials. OAuth belongs in ChatCRS, not dashboard code or machine-private scripts.
+
+
+`chatcrs codex reset list` reads available count and expirations with `GET /wham/rate-limit-reset-credits`, without model generation; credentials are renewed through ChatEnv when required, updating only the runtime token store. `chatcrs codex reset consume` is a dry-run unless both a persistent `--request-id` and `--execute` are provided. It persists an audit before sending and performs GET readback afterward. The same request ID is never sent twice; resolve uncertain outcomes through read-only inspection instead of creating another ID. A full reset changes the natural reset schedule and is not a Credits purchase.
 
 ```bash
 chatcrs codex reset list --profile work --json-output

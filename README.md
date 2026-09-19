@@ -67,7 +67,7 @@ chatcrs
 │   ├── quota [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--model MODEL] [--timeout TIMEOUT] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
 │   ├── reset  # Inspect or explicitly redeem banked Codex resets without model requests.
 │   │   ├── consume [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE] [--request-id REQUEST-ID] [--execute]  # Plan or redeem one reset with a persisted receipt and GET readback.
-│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read available reset count and expirations; never refresh credentials.
+│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read reset count and expirations; renew profile credentials when required.
 │   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv Codex token store.
 │   │   ├── refresh [--profile PROFILE] [--refresh-token REFRESH-TOKEN] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
 │   │   └── status [--profile PROFILE] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
@@ -157,7 +157,19 @@ Service-local 目标不进入第二套 ChatEnv namespace；用当前工作目录
 
 ## Codex 重置卡
 
-`chatcrs codex reset list` 通过 `GET /wham/rate-limit-reset-credits` 查询可用次数与到期时间；不请求模型、不刷新 OAuth。`chatcrs codex reset consume` 默认只生成计划，必须同时提供持久化的 `--request-id` 和 `--execute` 才消费一张卡。请求前保存审计，之后 GET 读回；相同请求 ID 不重复发送，结果不明应人工核对，不要生成新 ID 盲重试。完整重置会改变自然重置时间，且不是购买 Credits。
+Profile 客户端使用标准 ChatEnv `Codex` 续期流程：稳定配置位于 `envs/Codex`，轮换后的 access/refresh token 与到期元数据只写入 `tokens/Codex`，不会回填 ENV。过期时先续期；只读 GET 遇到 401 最多续期并重试一次；消费 POST 不自动重放。刷新凭据被上游拒绝时应重新授权，而不是切换代理或复制其他服务的 token。
+
+账号请求必须配置对应的 HTTPS Base URL。所有 ChatCRS HTTP 请求都忽略环境和系统 Proxy，并拒绝重定向；反代示例位于仓库 `infra/nginx/codex-relay.conf.example`。Nginx 只透传请求，不保存账号密钥。
+
+```env
+OPENAI_OAUTH_BASE_URL=https://auth-relay.example.com
+CHATGPT_BACKEND_BASE_URL=https://gpt-relay.example.com/backend-api
+```
+
+Python 消费者使用 `CodexResetClient.from_profile("work", refresh=True)`；需要完全不续期的诊断时显式传 `refresh=False`。不要在仪表盘或机器私有脚本中重写 OAuth。
+
+
+`chatcrs codex reset list` 通过 `GET /wham/rate-limit-reset-credits` 查询可用次数与到期时间；不请求模型；必要时通过 ChatEnv 标准流程续期 OAuth，并只更新运行态 token store。`chatcrs codex reset consume` 默认只生成计划，必须同时提供持久化的 `--request-id` 和 `--execute` 才消费一张卡。请求前保存审计，之后 GET 读回；相同请求 ID 不重复发送，结果不明应人工核对，不要生成新 ID 盲重试。完整重置会改变自然重置时间，且不是购买 Credits。
 
 ```bash
 chatcrs codex reset list --profile work --json-output

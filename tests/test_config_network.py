@@ -69,7 +69,7 @@ def setup_config(tmp_path, monkeypatch):
                 raise urllib.error.HTTPError(request.full_url, stream_status, PRIVATE, Message(), io.BytesIO(KEY.encode()))
             return Response(completed() if stream is None else stream, "text/event-stream")
 
-        monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+        monkeypatch.setattr("chatcrs.remote.open_request", urlopen)
         return requests
 
     return configure, values
@@ -162,7 +162,7 @@ def test_network_exception_is_safe(setup_config, monkeypatch):
     def fail(*args, **kwargs):
         raise urllib.error.URLError(PRIVATE + KEY)
 
-    monkeypatch.setattr(urllib.request, "urlopen", fail)
+    monkeypatch.setattr("chatcrs.remote.open_request", fail)
     result = CliRunner().invoke(chatenv_cli, ["test", "-t", "crs", "-I"])
     assert result.exit_code != 0
     assert KEY not in result.output

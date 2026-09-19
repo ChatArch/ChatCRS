@@ -460,7 +460,7 @@ def _reset_options(function):
 @codex_reset_group.command("list")
 @_reset_options
 def codex_reset_list(profile: str, base_url: str | None, timeout: float, json_output: bool) -> None:
-    """Read available reset count and expirations; never refresh credentials."""
+    """Read reset count and expirations; renew profile credentials when required."""
     from chatcrs.reset_credits import SafeResetError, inspect_reset_credits
     try:
         payload = inspect_reset_credits(profile=profile, reset_base_url=base_url, timeout=timeout)

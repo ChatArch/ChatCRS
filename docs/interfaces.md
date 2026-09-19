@@ -54,10 +54,10 @@ chatcrs
 | `chatcrs admin keys show` | `GET /admin/api-keys`, optional `POST /admin/api-keys/batch-stats`, `POST /admin/api-keys/batch-last-usage` | Admin bearer token | No | `CrsHttpClient.api_key_detail` |
 | `chatcrs key info` | `GET /openai/key-info` | caller CRS API key from profile or `--api-key` | No | `CrsHttpClient.key_info` |
 | `chatcrs codex token status` | local `tokens/Codex/<profile>.json` metadata | Codex ChatEnv profile/token store | No | `chatcrs.codex_direct.token_status` |
-| `chatcrs codex token refresh` | `POST <OPENAI_OAUTH_BASE_URL>/oauth/token`，默认 `https://auth.openai.com/oauth/token` | OpenAI refresh token from explicit option or `envs/Codex/<profile>.env` / `tokens/Codex/<profile>.json` | No durable mutation by default; durable refresh should use `chatenv token refresh Codex <profile>` so ChatEnv writes `tokens/Codex/<profile>.json` | `chatcrs.codex_direct.refresh_access_token` / `chatcrs.codex_direct.refresh_chatenv_token` |
-| `chatcrs codex account` | access-token claims/token-store summary; best-effort `GET <OPENAI_OAUTH_BASE_URL>/api/accounts` probe，默认 `https://auth.openai.com/api/accounts` | OpenAI access token from option or Codex ChatEnv token store; optional refresh | No | `chatcrs.codex_direct.inspect_account` |
-| `chatcrs codex quota` | `POST <CHATGPT_BACKEND_BASE_URL>/codex/responses`，默认 `https://chatgpt.com/backend-api/codex/responses` | OpenAI access token + stored/explicit account mapping | Sends minimal quota smoke; no local write | `chatcrs.codex_direct.inspect_quota` |
-| `chatcrs codex usage` | `GET <CHATGPT_BACKEND_BASE_URL>/wham/usage`，默认 `https://chatgpt.com/backend-api/wham/usage`；`GET <OPENAI_OAUTH_BASE_URL>/api/accounts` only when no token-store account mapping exists and `--account-id` is omitted | OpenAI access token from option or Codex ChatEnv token store; optional refresh; profile-only use prefers `tokens/Codex/<profile>.json` `values.account_id` and otherwise auto-resolves a unique account id | No | `chatcrs.codex_direct.inspect_usage` |
+| `chatcrs codex token refresh` | `POST <OPENAI_OAUTH_BASE_URL>/oauth/token`（需显式配置 Base URL） | OpenAI refresh token from explicit option or `envs/Codex/<profile>.env` / `tokens/Codex/<profile>.json` | No durable mutation by default; durable refresh should use `chatenv token refresh Codex <profile>` so ChatEnv writes `tokens/Codex/<profile>.json` | `chatcrs.codex_direct.refresh_access_token` / `chatcrs.codex_direct.refresh_chatenv_token` |
+| `chatcrs codex account` | access-token claims/token-store summary; best-effort `GET <OPENAI_OAUTH_BASE_URL>/api/accounts` probe（需显式配置 Base URL） | OpenAI access token from option or Codex ChatEnv token store; optional refresh | No | `chatcrs.codex_direct.inspect_account` |
+| `chatcrs codex quota` | `POST <CHATGPT_BACKEND_BASE_URL>/codex/responses`（需显式配置 Base URL） | OpenAI access token + stored/explicit account mapping | Sends minimal quota smoke; no local write | `chatcrs.codex_direct.inspect_quota` |
+| `chatcrs codex usage` | `GET <CHATGPT_BACKEND_BASE_URL>/wham/usage`（需显式配置 Base URL）；`GET <OPENAI_OAUTH_BASE_URL>/api/accounts` only when no token-store account mapping exists and `--account-id` is omitted | OpenAI access token from option or Codex ChatEnv token store; optional refresh; profile-only use prefers `tokens/Codex/<profile>.json` `values.account_id` and otherwise auto-resolves a unique account id | No | `chatcrs.codex_direct.inspect_usage` |
 
 | `chatcrs service install` | local `crs install` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
 | `chatcrs service update` | local `crs update` via `local_command` | Current server shell | Plan by default; `--execute` runs locally | `chatcrs.service.run_service_action` |
@@ -126,7 +126,19 @@ The canonical CRS ChatEnv namespace is `CRS`; stable CRS configuration lives in 
 
 ## Codex 重置卡
 
-`chatcrs codex reset list` 通过 `GET /wham/rate-limit-reset-credits` 查询可用次数与到期时间；不请求模型、不刷新 OAuth。`chatcrs codex reset consume` 默认只生成计划，必须同时提供持久化的 `--request-id` 和 `--execute` 才消费一张卡。请求前保存审计，之后 GET 读回；相同请求 ID 不重复发送，结果不明应人工核对，不要生成新 ID 盲重试。完整重置会改变自然重置时间，且不是购买 Credits。
+Profile 客户端使用标准 ChatEnv `Codex` 续期流程：稳定配置位于 `envs/Codex`，轮换后的 access/refresh token 与到期元数据只写入 `tokens/Codex`，不会回填 ENV。过期时先续期；只读 GET 遇到 401 最多续期并重试一次；消费 POST 不自动重放。刷新凭据被上游拒绝时应重新授权，而不是切换代理或复制其他服务的 token。
+
+账号请求必须配置对应的 HTTPS Base URL。所有 ChatCRS HTTP 请求都忽略环境和系统 Proxy，并拒绝重定向；反代示例位于仓库 `infra/nginx/codex-relay.conf.example`。Nginx 只透传请求，不保存账号密钥。
+
+```env
+OPENAI_OAUTH_BASE_URL=https://auth-relay.example.com
+CHATGPT_BACKEND_BASE_URL=https://gpt-relay.example.com/backend-api
+```
+
+Python 消费者使用 `CodexResetClient.from_profile("work", refresh=True)`；需要完全不续期的诊断时显式传 `refresh=False`。不要在仪表盘或机器私有脚本中重写 OAuth。
+
+
+`chatcrs codex reset list` 通过 `GET /wham/rate-limit-reset-credits` 查询可用次数与到期时间；不请求模型；必要时通过 ChatEnv 标准流程续期 OAuth，并只更新运行态 token store。`chatcrs codex reset consume` 默认只生成计划，必须同时提供持久化的 `--request-id` 和 `--execute` 才消费一张卡。请求前保存审计，之后 GET 读回；相同请求 ID 不重复发送，结果不明应人工核对，不要生成新 ID 盲重试。完整重置会改变自然重置时间，且不是购买 Credits。
 
 ```bash
 chatcrs codex reset list --profile work --json-output
