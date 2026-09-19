@@ -238,7 +238,7 @@ def test_upstream_error_code_cannot_smuggle_raw_credential():
 
 def test_oauth_failure_safe_payload_drops_arbitrary_upstream_text(monkeypatch):
     monkeypatch.setattr(direct, '_request_json', lambda *a, **k: (400, {'message': 'fixture-raw-canary'}, {}))
-    result = direct.refresh_access_token(refresh_token='fixture')
+    result = direct.refresh_access_token(refresh_token='fixture', oauth_base_url='https://auth.example.invalid')
     assert 'fixture-raw-canary' not in json.dumps(result)
 
 

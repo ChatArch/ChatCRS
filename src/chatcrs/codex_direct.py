@@ -118,16 +118,36 @@ def _normalize_headers(headers: dict[str, Any] | None) -> dict[str, str]:
     return normalized
 
 
+def _required_base_url(value: str | None, setting: str) -> str:
+    """Validate explicit HTTPS routing without rendering a secret-bearing URL."""
+    message = f"{setting} requires an explicit HTTPS Base URL without credentials, query or fragment"
+    if not isinstance(value, str) or not value or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError(message)
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        valid = (
+            parsed.scheme == "https" and bool(parsed.hostname)
+            and parsed.username is None and parsed.password is None
+            and not any(char in value for char in ("?", "#", "\\"))
+            and (parsed.port is None or parsed.port > 0)
+        )
+    except ValueError:
+        raise ValueError(message) from None
+    if not valid:
+        raise ValueError(message)
+    return value.rstrip("/")
+
+
 def _oauth_token_url(oauth_base_url: str | None = None) -> str:
-    return f"{(oauth_base_url or AUTH_BASE_URL).rstrip('/')}/oauth/token"
+    return f"{_required_base_url(oauth_base_url, 'OPENAI_OAUTH_BASE_URL')}/oauth/token"
 
 
 def _accounts_url(auth_base_url: str | None = None) -> str:
-    return f"{(auth_base_url or AUTH_BASE_URL).rstrip('/')}/api/accounts"
+    return f"{_required_base_url(auth_base_url, 'OPENAI_OAUTH_BASE_URL')}/api/accounts"
 
 
 def _chatgpt_backend_base_url(backend_base_url: str | None = None) -> str:
-    return (backend_base_url or CHATGPT_BACKEND_BASE_URL).rstrip("/")
+    return _required_base_url(backend_base_url, "CHATGPT_BACKEND_BASE_URL")
 
 
 def _codex_usage_url(backend_base_url: str | None = None) -> str:
@@ -441,8 +461,8 @@ def _configured_backend_base_url(values: dict[str, str] | None = None) -> str:
     for key in CHATGPT_BACKEND_BASE_URL_KEYS:
         value = values.get(key)
         if value:
-            return value.rstrip("/")
-    return CHATGPT_BACKEND_BASE_URL
+            return _required_base_url(value, key)
+    return _chatgpt_backend_base_url(None)
 
 
 def _codex_profile_values_or_empty(*, profile: str, home: str | Path | None = None) -> dict[str, str]:
@@ -551,7 +571,7 @@ def refresh_chatenv_token(
     if not refresh_candidates:
         raise ValueError(f"Codex ChatEnv profile {profile_name} is missing OPENAI_REFRESH_TOKEN")
 
-    oauth_base_url = values.get("OPENAI_OAUTH_BASE_URL") or AUTH_BASE_URL
+    oauth_base_url = _required_base_url(values.get("OPENAI_OAUTH_BASE_URL"), "OPENAI_OAUTH_BASE_URL")
     client_id, client_id_source = _configured_client_id(values)
     refreshed: dict[str, Any] = {}
     refresh_token_source = ""
@@ -902,6 +922,7 @@ def inspect_account(
 ) -> dict[str, Any]:
     profile_name = _normalize_profile(profile)
     profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
+    auth_base_url = _required_base_url(profile_values.get("OPENAI_OAUTH_BASE_URL"), "OPENAI_OAUTH_BASE_URL")
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
         profile=profile_name,
@@ -914,7 +935,7 @@ def inspect_account(
     payload = get_account(
         access_token=token,
         timeout=timeout,
-        auth_base_url=profile_values.get("OPENAI_OAUTH_BASE_URL"),
+        auth_base_url=auth_base_url,
         stored_account_id=stored_account_id,
     )
     payload["profile"] = profile_name
@@ -1000,6 +1021,7 @@ def inspect_usage(
 ) -> dict[str, Any]:
     profile_name = _normalize_profile(profile)
     profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
+    backend_base_url = _configured_backend_base_url(profile_values)
     explicit_account_id = account_id
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
@@ -1022,7 +1044,7 @@ def inspect_usage(
         access_token=token,
         account_id=account_id,
         timeout=timeout,
-        backend_base_url=_configured_backend_base_url(profile_values),
+        backend_base_url=backend_base_url,
     )
     if refresh and access_token is None and refresh_summary is None and payload.get("status") == 401:
         token, refresh_summary = _refresh_and_read_access_token(profile=profile_name, home=home)
@@ -1038,7 +1060,7 @@ def inspect_usage(
             access_token=token,
             account_id=account_id,
             timeout=timeout,
-            backend_base_url=_configured_backend_base_url(profile_values),
+            backend_base_url=backend_base_url,
         )
     payload["profile"] = profile_name
     payload["token_service"] = CODEX_SERVICE_NAME
@@ -1062,6 +1084,7 @@ def inspect_quota(
 
     profile_name = _normalize_profile(profile)
     profile_values = _codex_profile_values_or_empty(profile=profile_name, home=home)
+    backend_base_url = _configured_backend_base_url(profile_values)
     explicit_account_id = account_id
     token, refresh_summary = _resolve_access_token(
         access_token=access_token,
@@ -1085,7 +1108,7 @@ def inspect_quota(
         account_id=account_id,
         model=model,
         timeout=timeout,
-        backend_base_url=_configured_backend_base_url(profile_values),
+        backend_base_url=backend_base_url,
     )
     if refresh and access_token is None and refresh_summary is None and payload.get("status") == 401:
         token, refresh_summary = _refresh_and_read_access_token(profile=profile_name, home=home)
@@ -1102,7 +1125,7 @@ def inspect_quota(
             account_id=account_id,
             model=model,
             timeout=timeout,
-            backend_base_url=_configured_backend_base_url(profile_values),
+            backend_base_url=backend_base_url,
         )
     payload["profile"] = profile_name
     payload["token_service"] = CODEX_SERVICE_NAME

@@ -54,9 +54,10 @@ def server(*, status=200, redirect=None):
 def invoke(kind, base, home):
     base += '/selected'
     if kind == 'oauth':
-        return codex_direct.refresh_access_token(refresh_token='fixture-refresh', oauth_base_url=base, timeout=2)['status']
+        # Transport fixtures intentionally use HTTP loopback; business URLs require HTTPS.
+        return codex_direct._request_json('POST', base + '/oauth/token', data={'refresh_token': 'fixture-refresh'}, timeout=2)[0]
     if kind == 'codex':
-        return codex_direct.get_usage(access_token='fixture-access', account_id='fixture-account', backend_base_url=base, timeout=2)['status']
+        return codex_direct._request_json('GET', base + '/wham/usage', headers={'Authorization': 'Bearer fixture-access'}, timeout=2)[0]
     if kind == 'reset':
         return reset_credits._http('POST', base + '/wham/rate-limit-reset-credits/consume', {'Authorization': 'Bearer fixture-access'}, {'redeem_request_id': 'fixture-id'}, 2)[0]
     if kind == 'local':
