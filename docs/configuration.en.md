@@ -59,8 +59,8 @@ Direct `chatcrs codex ...` operations use the separate ChatCRS-owned `Codex` nam
 
 | Field | Purpose | Default |
 |---|---|---|
-| `OPENAI_OAUTH_BASE_URL` | OAuth token and accounts operations | `https://auth.openai.com` |
-| `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend requests | `https://chatgpt.com/backend-api` |
+| `OPENAI_OAUTH_BASE_URL` | OAuth token and accounts operations | Explicit HTTPS Base URL; no implicit default |
+| `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend requests | Explicit HTTPS Base URL; no implicit default |
 
 A relay changes the destination base URL, not credential ownership. Keep tokens and account headers out of reverse-proxy configuration and logs. Account summaries prefer token claims and stored metadata; usage output redacts account, email, and user identities.
 

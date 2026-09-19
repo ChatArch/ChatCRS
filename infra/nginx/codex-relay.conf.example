@@ -1,0 +1,94 @@
+# Token-free HTTPS reverse-proxy example for ChatCRS.
+# Replace the example hostnames/certificate paths at deployment time.
+# OAuth/API credentials stay in ChatEnv/token stores, never in this file.
+# No forward HTTP/SOCKS proxy is required by the client.
+
+server {
+    listen 80;
+    server_name gpt-relay.example.com auth-relay.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name gpt-relay.example.com;
+    ssl_certificate /etc/nginx/tls/relay-fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/relay-privkey.pem;
+
+    access_log off;
+    client_max_body_size 16M;
+    proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_ssl_name chatgpt.com;
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_ssl_verify_depth 4;
+    proxy_set_header Host chatgpt.com;
+    proxy_set_header Cookie "";
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    location = /backend-api/wham/usage {
+        limit_except GET { deny all; }
+        proxy_pass https://chatgpt.com/backend-api/wham/usage;
+    }
+
+    location = /backend-api/codex/responses {
+        limit_except POST { deny all; }
+        proxy_pass https://chatgpt.com/backend-api/codex/responses;
+        proxy_next_upstream off;
+    }
+
+    location = /backend-api/wham/rate-limit-reset-credits {
+        limit_except GET { deny all; }
+        proxy_pass https://chatgpt.com/backend-api/wham/rate-limit-reset-credits;
+        proxy_next_upstream off;
+    }
+
+    location = /backend-api/wham/rate-limit-reset-credits/consume {
+        limit_except POST { deny all; }
+        proxy_pass https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume;
+        proxy_next_upstream off;
+    }
+
+    location / { return 404; }
+}
+
+server {
+    listen 443 ssl;
+    server_name auth-relay.example.com;
+    ssl_certificate /etc/nginx/tls/relay-fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/relay-privkey.pem;
+
+    access_log off;
+    client_max_body_size 2M;
+    proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_ssl_name auth.openai.com;
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_ssl_verify_depth 4;
+    proxy_set_header Host auth.openai.com;
+    proxy_set_header Cookie "";
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location = /oauth/token {
+        limit_except POST { deny all; }
+        proxy_pass https://auth.openai.com/oauth/token;
+        proxy_next_upstream off;
+    }
+
+    location = /api/accounts {
+        limit_except GET { deny all; }
+        proxy_pass https://auth.openai.com/api/accounts;
+    }
+
+    location / { return 404; }
+}

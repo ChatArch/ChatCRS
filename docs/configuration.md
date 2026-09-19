@@ -62,8 +62,8 @@ chatenv set CRS_API_MODEL= -I
 
 | 字段 | 用途 | 敏感 |
 |---|---|---|
-| `OPENAI_OAUTH_BASE_URL` | OAuth refresh 与 accounts API base URL；默认 `https://auth.openai.com` | 否 |
-| `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend base URL；默认 `https://chatgpt.com/backend-api` | 否 |
+| `OPENAI_OAUTH_BASE_URL` | OAuth refresh 与 accounts API base URL；默认 `https://auth.openai.com` | 显式 HTTPS Base URL；无隐式默认值 |
+| `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend base URL；默认 `https://chatgpt.com/backend-api` | 显式 HTTPS Base URL；无隐式默认值 |
 
 中转只改变目标 base URL。Access token、refresh token、`ChatGPT-Account-ID` 等凭据仍由客户端按请求头或 token-store 管理，不能写入 Nginx/proxy 配置或日志。`account` 输出优先使用 access-token claims 与 token-store metadata 生成安全 `account_summary`，accounts API 只作为 redacted probe；`usage` 输出只保留 `account_id_hash` 与脱敏 body，不打印 raw account id、email 或 user id。
 
