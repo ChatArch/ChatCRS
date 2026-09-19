@@ -816,7 +816,9 @@ def get_usage(
         raise ValueError("OpenAI access token is required")
     if not account_id:
         raise ValueError("ChatGPT account id is required")
-    resolved_usage_url = usage_url or _codex_usage_url(backend_base_url)
+    if usage_url is not None:
+        _required_base_url(usage_url, "usage_url")
+    resolved_usage_url = usage_url if usage_url is not None else _codex_usage_url(backend_base_url)
     status, parsed, headers = _request_json(
         "GET",
         resolved_usage_url,
@@ -877,7 +879,9 @@ def get_quota(
     if not account_id:
         raise ValueError("ChatGPT account id is required")
     payload = _codex_quota_smoke_payload(model=model, prompt=prompt)
-    resolved_responses_url = responses_url or _codex_responses_url(backend_base_url)
+    if responses_url is not None:
+        _required_base_url(responses_url, "responses_url")
+    resolved_responses_url = responses_url if responses_url is not None else _codex_responses_url(backend_base_url)
     status, parsed, headers = _request_json(
         "POST",
         resolved_responses_url,
