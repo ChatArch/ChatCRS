@@ -183,6 +183,25 @@ def _account_id_from_access_token_claims(access_token: str) -> str:
     return account_id if isinstance(account_id, str) and account_id else ""
 
 
+def _validate_token_identity(previous: str, current: str, *, account_id: str = "") -> None:
+    """Reject known account/user changes without putting claims in an error."""
+    old_claims, new_claims = _jwt_claims(previous), _jwt_claims(current)
+    old_auth = old_claims.get("https://api.openai.com/auth") or {}
+    new_auth = new_claims.get("https://api.openai.com/auth") or {}
+    old_auth = old_auth if isinstance(old_auth, dict) else {}
+    new_auth = new_auth if isinstance(new_auth, dict) else {}
+    accounts = [account_id, old_auth.get("chatgpt_account_id"), new_auth.get("chatgpt_account_id")]
+    known_accounts = {value for value in accounts if isinstance(value, str) and value}
+    if len(known_accounts) > 1:
+        raise ValueError("Codex token account identity changed")
+    for before, after in [(old_claims.get("sub"), new_claims.get("sub"))] + [
+        (old_auth.get(key), new_auth.get(key))
+        for key in ("chatgpt_user_id", "user_id", "chatgpt_account_user_id")
+    ]:
+        if before and after and before != after:
+            raise ValueError("Codex token user identity changed")
+
+
 def _account_summary_from_token_claims(access_token: str, *, stored_account_id: str = "") -> dict[str, Any]:
     claims = _jwt_claims(access_token)
     auth_claim = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else None
@@ -467,7 +486,7 @@ def refresh_access_token(
             "ok": False,
             "mutated": False,
             "status": status,
-            "safe": redact(parsed),
+            "safe": {"ok": False, "status": status, "code": "oauth_refresh_failed"},
             "values": {},
             "token_present": False,
             "refresh_token_rotated": False,
@@ -548,11 +567,21 @@ def refresh_chatenv_token(
             refresh_token_source = candidate_source
             break
         failed_sources.append({"source": candidate_source, "status": refreshed.get("status")})
+        # Only a definite credential rejection permits the ENV bootstrap fallback.
+        # A redirect, throttle or server failure may hide a completed rotation.
+        if refreshed.get("status") not in (400, 401):
+            break
     if not refreshed.get("ok"):
         status = failed_sources[-1]["status"] if failed_sources else refreshed.get("status")
         attempted = ",".join(item["source"] for item in failed_sources) or "none"
         raise ValueError(f"OpenAI OAuth refresh failed: status={status}; attempted_sources={attempted}")
     refreshed_values = dict(refreshed.get("values") or {})
+    # Validate before returning: ChatEnv persists this result immediately.
+    _validate_token_identity(
+        str(existing_values.get("access_token") or values.get("OPENAI_ACCESS_TOKEN") or ""),
+        str(refreshed_values.get("access_token") or ""),
+        account_id=str(existing_values.get("account_id") or ""),
+    )
     if "refresh_token" not in refreshed_values:
         refreshed_values["refresh_token"] = refresh_token
     for metadata_key in ("account_id", "account_label", "account_name"):
