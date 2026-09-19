@@ -57,7 +57,7 @@ Token status exposes metadata only. `chatcrs admin token clear` is a dry run unl
 
 Direct `chatcrs codex ...` operations use the separate ChatCRS-owned `Codex` namespace. Stable refresh seed and relay configuration live in the matching Env profile; generated access/refresh tokens and account metadata live in its runtime token store.
 
-| Field | Purpose | Default |
+| Field | Purpose | Requirement |
 |---|---|---|
 | `OPENAI_OAUTH_BASE_URL` | OAuth token and accounts operations | Explicit HTTPS Base URL; no implicit default |
 | `CHATGPT_BACKEND_BASE_URL` | ChatGPT backend requests | Explicit HTTPS Base URL; no implicit default |
