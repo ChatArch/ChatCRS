@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add thin `chatcrs admin accounts codex usage|credits|consume|operation` commands over `CrsManagedCodexClient`, using a scoped management Key or an already-established Admin session from the selected CRS profile, with fixed account identity. Managed requests never log in or renew Admin sessions; legacy Admin commands remain unchanged.
+- Require account IDs and persistent consume/operation request IDs; consumption is a local dry-run unless `--execute` is explicit. Unknown/pending outcomes and errors exit nonzero without replaying calls or leaking exception bodies.
+- Document the native CRS Admin API prerequisite, safe JSON receipts, and the unchanged cached `admin accounts usage` boundary. These managed interfaces are not part of 0.3.4.
+
 ## 2026-09-20 - 0.3.4
 
 ### Fixed

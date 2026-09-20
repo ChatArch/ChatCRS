@@ -276,6 +276,81 @@ def admin_accounts_usage_command(
         click.echo(f"ok={payload['ok']} accounts={payload['count']} mutated={payload['mutated']}")
 
 
+def _managed_codex_options(function):
+    function = click.option("--json-output", is_flag=True, default=False, help="Render structured JSON output.")(function)
+    function = click.option("--timeout", type=float, default=20.0, show_default=True)(function)
+    function = click.option("--account-id", required=True, help="Fixed CRS-managed account ID.")(function)
+    function = click.option("--profile", default="default", show_default=True, help="CRS ChatEnv profile under envs/CRS/<profile>.env; not Codex OAuth.")(function)
+    return function
+
+
+def _run_managed_codex(method: str, *, profile: str, account_id: str, timeout: float,
+                       json_output: bool, **kwargs) -> None:
+    # Keep help/tree independent of the optional managed-account implementation.
+    from chatcrs.managed_codex import CrsManagedCodexClient, ManagedCodexError
+
+    try:
+        client = CrsManagedCodexClient.from_profile(profile, account_id=account_id, timeout=timeout)
+        payload = getattr(client, method)(**kwargs)
+    except Exception as exc:
+        # Only the adapter's fixed errors are public; arbitrary exceptions may
+        # contain profile credentials or upstream bodies. Never replay a call.
+        safe_error = exc if isinstance(exc, ManagedCodexError) else ManagedCodexError("request_failed")
+        if json_output:
+            _echo_json({"status": "error", "error": str(safe_error)})
+            raise click.exceptions.Exit(1) from None
+        raise click.ClickException(str(safe_error)) from None
+
+    if json_output:
+        _echo_json(payload)
+    else:
+        for key, value in payload.items():
+            click.echo(f"{key}: {json.dumps(value, ensure_ascii=False)}")
+    if method in ("consume", "operation"):
+        known = ("reset_verified", "nothing_to_reset", "no_credit")
+        if method == "consume" and not kwargs.get("execute", False):
+            known = ("dry_run",)
+        if payload.get("status") not in known:
+            raise click.exceptions.Exit(1)
+
+
+@admin_accounts_group.group(name="codex")
+def admin_accounts_codex_group() -> None:
+    """CRS 托管 Codex 账号；需原生 Admin 接口。"""
+
+
+@admin_accounts_codex_group.command(name="usage")
+@_managed_codex_options
+def admin_accounts_codex_usage_command(**kwargs) -> None:
+    """读取固定账号的实时上游额度；不是缓存统计。"""
+    _run_managed_codex("usage", **kwargs)
+
+
+@admin_accounts_codex_group.command(name="credits")
+@_managed_codex_options
+def admin_accounts_codex_credits_command(**kwargs) -> None:
+    """只读查询重置卡，不消费。"""
+    _run_managed_codex("reset_credits", **kwargs)
+
+
+@admin_accounts_codex_group.command(name="consume")
+@_managed_codex_options
+@click.option("--request-id", required=True, help="Persistent operation ID; never replace it to retry an uncertain result.")
+@click.option("--credit-id", default=None, help="Optional reset credit ID.")
+@click.option("--execute", is_flag=True, default=False, help="Consume explicitly; default is a local, network-free dry-run.")
+def admin_accounts_codex_consume_command(**kwargs) -> None:
+    """默认本地计划；显式执行消费，不自动重放。"""
+    _run_managed_codex("consume", **kwargs)
+
+
+@admin_accounts_codex_group.command(name="operation")
+@_managed_codex_options
+@click.option("--request-id", required=True, help="Existing persistent operation ID.")
+def admin_accounts_codex_operation_command(**kwargs) -> None:
+    """读取历史回执；待定或未知状态退出非零。"""
+    _run_managed_codex("operation", **kwargs)
+
+
 @admin_accounts_group.command(name="refresh-status")
 @_common_remote_options
 @click.argument("account_id")

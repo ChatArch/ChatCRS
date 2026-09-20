@@ -6,37 +6,49 @@ This page aligns the current ChatCRS CLI surface with its execution boundary. Ou
 
 ```text
 chatcrs
-├── health                         # GET /health
-├── admin                          # CRS Admin HTTP API command group
-│   ├── login                      # POST /web/auth/login
-│   ├── token                      # local runtime Admin session token cache
-│   │   ├── status                 # token file metadata, no token output
-│   │   ├── refresh                # POST /web/auth/login; ChatEnv writes token file for provider refresh
-│   │   └── clear                  # dry-run/delete local token file
-│   ├── accounts                   # OpenAI/Codex account state
-│   │   ├── usage                  # GET /admin/openai-accounts
-│   │   └── refresh-status         # POST /admin/openai-accounts/{account_id}/reset-status
-│   └── keys                       # CRS API key metadata and statistics
-│       ├── list                   # GET /admin/api-keys + batch stats/last usage
-│       └── show                   # GET /admin/api-keys + batch stats/last usage, filtered by id/name
-├── key                            # API-key-only self inspection
-│   └── info                       # GET /openai/key-info
-├── codex                          # Direct OpenAI Codex OAuth/backend helpers
-│   ├── token
-│   │   ├── status                 # local OpenAI token-store metadata, no token output
-│   │   └── refresh                # POST OPENAI_OAUTH_BASE_URL/oauth/token
-│   ├── account                    # GET OPENAI_OAUTH_BASE_URL/api/accounts
-│   ├── quota                      # POST CHATGPT_BACKEND_BASE_URL/codex/responses
-│   └── usage                      # GET CHATGPT_BACKEND_BASE_URL/wham/usage
-└── service                        # server-local service lifecycle
-    ├── install                    # local crs install; dry-run by default
-    ├── update                     # local crs update; dry-run by default
-    ├── start                      # local crs start; dry-run by default
-    ├── stop                       # local crs stop; dry-run by default
-    ├── restart                    # local crs restart; dry-run by default
-    ├── status                     # local crs status; read-only execution by default
-    ├── switch-branch              # local crs switch-branch; dry-run by default
-    └── update-pricing             # local crs update-pricing; dry-run by default
+├── --help  # Show this message and exit.
+├── --version  # Show the version and exit.
+├── --tree  # Print the registered CLI tree and exit.
+├── --tree-brief  # Print the registered CLI tree without parameter signatures and exit.
+├── admin  # Remote CRS administrator operations via HTTPS Admin API.
+│   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── codex  # CRS 托管 Codex 账号；需原生 Admin 接口。
+│   │   │   ├── consume [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID] [--credit-id CREDIT-ID] [--execute]  # 默认本地计划；显式执行消费，不自动重放。
+│   │   │   ├── credits [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 只读查询重置卡，不消费。
+│   │   │   ├── operation [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID]  # 读取历史回执；待定或未知状态退出非零。
+│   │   │   └── usage [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 读取固定账号的实时上游额度；不是缓存统计。
+│   │   ├── refresh-status [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] <ACCOUNT-ID> [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
+│   │   └── usage [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
+│   ├── keys  # Inspect remote CRS API keys with admin privileges.
+│   │   ├── list [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--include-stats] [--time-range TIME-RANGE] [--json-output]  # List CRS API key metadata, optionally including usage stats.
+│   │   └── show [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] <KEY-ID> [--include-stats] [--time-range TIME-RANGE] [--json-output]  # Show one CRS API key by id or name.
+│   ├── login [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--save-token] [--json-output]  # Verify CRS admin login without printing the session token.
+│   └── token  # Manage cached CRS admin session tokens in the ChatArch token store.
+│       ├── clear [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--execute] [--json-output]  # Clear the cached CRS admin session token.
+│       ├── refresh [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--json-output]  # Login and save a fresh CRS admin session token.
+│       └── status [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--json-output]  # Show cached CRS admin token metadata without printing the token.
+├── codex  # Direct OpenAI Codex account token and usage helpers.
+│   ├── account [--profile PROFILE] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Read a safe OpenAI Codex account summary from token claims and API probe.
+│   ├── quota [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--model MODEL] [--timeout TIMEOUT] [--json-output]  # Run a profile-only Codex responses smoke and show quota headers.
+│   ├── reset  # Inspect or explicitly redeem banked Codex resets without model requests.
+│   │   ├── consume [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE] [--request-id REQUEST-ID] [--execute]  # Plan or redeem one reset with a persisted receipt and GET readback.
+│   │   └── list [--json-output] [--timeout TIMEOUT] [--base-url BASE-URL] [--profile PROFILE]  # Read reset count and expirations; renew profile credentials when required.
+│   ├── token  # Manage OpenAI OAuth tokens through the ChatEnv Codex token store.
+│   │   ├── refresh [--profile PROFILE] [--refresh-token REFRESH-TOKEN] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Refresh an OpenAI OAuth access token without printing token values.
+│   │   └── status [--profile PROFILE] [--json-output]  # Show cached OpenAI OAuth token metadata without printing tokens.
+│   └── usage [--profile PROFILE] [--account-id ACCOUNT-ID] [--access-token ACCESS-TOKEN] [--refresh] [--client-id CLIENT-ID] [--timeout TIMEOUT] [--json-output]  # Read Codex usage and quota metadata directly from OpenAI.
+├── health [--base-url BASE-URL] [--json-output]  # Verify the CRS /health endpoint.
+├── key  # CRS API-key-only operations that do not require admin login.
+│   └── info [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--timeout TIMEOUT] [--path INFO-PATH] [--json-output]  # Query CRS key-info using only a CRS API key.
+└── service  # Local CRS service lifecycle commands for the current server.
+    ├── install [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs install` on this server.
+    ├── restart [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs restart` on this server.
+    ├── start [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs start` on this server.
+    ├── status [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--json-output]  # Execute local `crs status` on this server.
+    ├── stop [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs stop` on this server.
+    ├── switch-branch <BRANCH> [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs switch-branch <branch>` on this server.
+    ├── update [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs update` on this server.
+    └── update-pricing [--app-dir APP-DIR] [--crs-command CRS-COMMAND] [--timeout TIMEOUT] [--execute] [--json-output]  # Plan or execute local `crs update-pricing` on this server.
 ```
 
 ## CLI to HTTP / local interface
@@ -151,3 +163,28 @@ An explicit `--base-url` can select a reset backend when a configured relay does
 |---|---|---|
 | `chatcrs codex reset list` | `GET /wham/rate-limit-reset-credits` | `inspect_reset_credits` |
 | `chatcrs codex reset consume` | `POST /wham/rate-limit-reset-credits/consume`; GET readback | `consume_reset_credit` |
+
+
+## CRS-managed Codex (Unreleased)
+
+This managed client is **Unreleased** source functionality, **not included in 0.3.4**. Network operations require a CRS server with the native, Admin-authenticated routes below. Older servers without them fail closed: no fallback to local OAuth, cached statistics, or `reset-status`. This does not claim a server release or deployment.
+
+Every command requires `--account-id`. `--profile` defaults to `default` and selects the existing `CRS` ChatEnv namespace, never a `Codex` OAuth profile. It uses a scoped management Key (`CRS_API_KEY`, `crsm_` prefix) from the selected CRS profile, without reading Admin sessions, logging in or falling back. Operators without a Key must establish an Admin session separately with `chatcrs admin login --profile <profile> --save-token`; missing or rejected sessions fail without login, renewal or replay. Legacy Admin commands retain their defaults. It pins the server origin/account identity (`token_service="CRS"`) without copying upstream OAuth credentials. The thin CLI lazily calls `chatcrs.managed_codex.CrsManagedCodexClient.from_profile(crs_profile="default", account_id="account-placeholder", home=None, timeout=20)`. Python consumers use its `identity`, `token_service`, and methods directly, without shelling out to the CLI.
+
+| CLI | Native CRS route (server prerequisite) | Python method / mutation boundary |
+|---|---|---|
+| `chatcrs admin accounts codex usage` | `GET /admin/openai-accounts/{account_id}/codex/usage` | `usage()`; fresh upstream windows, read-only |
+| `chatcrs admin accounts codex credits` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits` | `reset_credits()`; read-only, never consumes |
+| `chatcrs admin accounts codex consume` | `POST /admin/openai-accounts/{account_id}/codex/reset-credits/consume` | `consume(request_id, credit_id=None, execute=False)`; local network-free dry-run by default |
+| `chatcrs admin accounts codex operation` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits/operations/{request_id}` | `operation(request_id)`; read-only historical receipt |
+
+```bash
+chatcrs admin accounts codex usage --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex credits --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex consume --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+chatcrs admin accounts codex operation --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+```
+
+`consume` and `operation` require `--request-id`; consumption optionally accepts `--credit-id credit-placeholder`. Add `--execute` only after reviewing the target and persist the same request ID. Each CLI invocation calls the adapter method once: no automatic replay or new ID. Inspect an uncertain receipt with the original ID instead of blindly consuming again.
+
+`--json-output` emits the adapter's safe structured JSON. Exceptions produce fixed safe errors and nonzero exits, never raw exceptions or credentials. A local `dry_run` exits 0. Executed consumption and historical receipts exit 0 only for `reset_verified`, `nothing_to_reset`, or `no_credit` (the latter two do not mean a credit was consumed). `uncertain`, `pending`, unknown states, HTTP 202, and exceptions are not success and exit nonzero. Historical unknown receipt states may be displayed but are not fresh quota verification. Existing `chatcrs admin accounts usage` keeps its cached CRS statistics semantics.

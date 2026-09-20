@@ -12,6 +12,11 @@ chatcrs
 ├── --tree-brief  # Print the registered CLI tree without parameter signatures and exit.
 ├── admin  # Remote CRS administrator operations via HTTPS Admin API.
 │   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── codex  # CRS 托管 Codex 账号；需原生 Admin 接口。
+│   │   │   ├── consume [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID] [--credit-id CREDIT-ID] [--execute]  # 默认本地计划；显式执行消费，不自动重放。
+│   │   │   ├── credits [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 只读查询重置卡，不消费。
+│   │   │   ├── operation [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID]  # 读取历史回执；待定或未知状态退出非零。
+│   │   │   └── usage [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 读取固定账号的实时上游额度；不是缓存统计。
 │   │   ├── refresh-status [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] <ACCOUNT-ID> [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
 │   │   └── usage [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
 │   ├── keys  # Inspect remote CRS API keys with admin privileges.
@@ -191,3 +196,28 @@ chatcrs codex reset consume --profile work --request-id one-reviewed-operation -
 ```
 
 如既有反代未提供重置路由，可用 `--base-url` 显式指定重置后端；它不改变该 profile 的 usage/auth base，也不会修改配置。服务使用 ChatGPT 后端接口，可能随上游变化，不等同于稳定的 OpenAI Platform 公共 API。Python 消费者使用 `chatcrs.reset_credits.CodexResetClient`、`inspect_reset_credits` 与 `consume_reset_credit`；客户端 `consume(..., execute=True)` 由调用者自己的策略和持久化去重保护。ChatGlance 的阈值策略不属于 ChatCRS。
+
+
+## CRS 托管 Codex（Unreleased）
+
+此管理型客户端是 **Unreleased** 源码功能，**不包含在 0.3.4**。网络操作的前置条件是 CRS 服务端部署原生、受 Admin 鉴权保护的以下接口；旧服务器没有这些路由时会失败，不回退为本地 OAuth、缓存统计或 `reset-status`。这不是服务端已发布/已部署的承诺。
+
+所有命令必须指定 `--account-id`；`--profile` 默认 `default`，只选择既有 `CRS` ChatEnv namespace，绝不是 `Codex` OAuth profile。固定服务 origin 与账号 identity（`token_service="CRS"`），不复制上游 OAuth。仪表板优先在所选 CRS profile 中配置专用管理 Key（`CRS_API_KEY`，`crsm_` 前缀）：客户端只发送该 Key，不读取 Admin 会话或以用户名/密码回退；Key 被拒绝时明确失败。未配置 Key 的操作员路径只复用已存在的 CRS Admin 会话；缺失或被拒绝时失败，不自动登录、续期或重放。请先独立运行 `chatcrs admin login --profile <profile> --save-token` 建立会话。旧 Admin 命令的默认登录生命周期不变。普通模型 Key 不适用于此接口。CLI 仅延迟导入并调用 `chatcrs.managed_codex.CrsManagedCodexClient.from_profile(crs_profile="default", account_id="account-placeholder", home=None, timeout=20)`；Python 消费者直接使用该类的 `identity`、`token_service` 和下表方法，不要 shell out 到 CLI。
+
+| CLI | 原生 CRS 接口（服务端前置） | Python 方法 / 写入边界 |
+|---|---|---|
+| `chatcrs admin accounts codex usage` | `GET /admin/openai-accounts/{account_id}/codex/usage` | `usage()`；实时上游额度，只读 |
+| `chatcrs admin accounts codex credits` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits` | `reset_credits()`；只读，不消费 |
+| `chatcrs admin accounts codex consume` | `POST /admin/openai-accounts/{account_id}/codex/reset-credits/consume` | `consume(request_id, credit_id=None, execute=False)`；默认本地无网络 dry-run |
+| `chatcrs admin accounts codex operation` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits/operations/{request_id}` | `operation(request_id)`；只读历史回执 |
+
+```bash
+chatcrs admin accounts codex usage --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex credits --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex consume --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+chatcrs admin accounts codex operation --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+```
+
+`consume` 与 `operation` 的 `--request-id` 必需；消费可选 `--credit-id credit-placeholder`。确认目标后才给消费命令加 `--execute`，并持久保存同一个 request ID。CLI 每次只调用一次客户端方法，不自动重试、不换 ID；不确定结果使用原 ID 查回执，不盲目再消费。
+
+`--json-output` 输出客户端安全结构化 JSON；异常输出固定安全错误，退出非零，不输出原始异常或凭据。默认消费计划的 `dry_run` 退出 0；实际消费或历史回执仅 `reset_verified`、`nothing_to_reset`、`no_credit` 为已知完成结果、退出 0（后两者不代表已消费）。`uncertain`、`pending`、未知状态、HTTP 202 或异常均非成功、退出非零；历史 receipt 的未知状态可以显示，但不是新鲜额度验证。旧 `chatcrs admin accounts usage` 仍读取 CRS 缓存统计，不改变语义。

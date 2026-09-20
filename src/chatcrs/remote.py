@@ -55,21 +55,26 @@ class CrsProfile:
         }
 
 
-def load_crs_profile(profile: str = DEFAULT_CRS_PROFILE, *, home: str | Path | None = None) -> CrsProfile:
+def load_crs_profile(
+    profile: str = DEFAULT_CRS_PROFILE, *, home: str | Path | None = None,
+    allow_env: bool = True,
+) -> CrsProfile:
     """Load a CRS profile from ChatEnv ``envs/CRS/<profile>.env``.
 
     ChatCRS has one canonical service namespace: CRS HTTP/API profiles. Host
     lifecycle fields such as SSH aliases or app directories are intentionally
     not part of this profile because they are not HTTP API management inputs.
+    ``allow_env=False`` pins every field to this profile without ambient fallback.
     """
 
     values = EnvStore(get_paths(home).envs_dir).load_profile(ChatcrsConfig, profile)
-    base_url = (values.get("CRS_API_BASE") or os.environ.get("CRS_API_BASE") or "").rstrip("/")
+    env = os.environ if allow_env else {}
+    base_url = (values.get("CRS_API_BASE") or env.get("CRS_API_BASE") or "").rstrip("/")
     return CrsProfile(
         base_url=base_url,
-        api_key=values.get("CRS_API_KEY") or os.environ.get("CRS_API_KEY", ""),
-        username=values.get("CRS_USERNAME") or os.environ.get("CRS_USERNAME", ""),
-        password=values.get("CRS_PASSWORD") or os.environ.get("CRS_PASSWORD", ""),
+        api_key=values.get("CRS_API_KEY") or env.get("CRS_API_KEY", ""),
+        username=values.get("CRS_USERNAME") or env.get("CRS_USERNAME", ""),
+        password=values.get("CRS_PASSWORD") or env.get("CRS_PASSWORD", ""),
         admin_token="",
     )
 
@@ -216,8 +221,10 @@ class CrsHttpClient:
             )
         return payload
 
-    def _admin_headers(self) -> dict[str, str]:
+    def _admin_headers(self, *, allow_login: bool = True) -> dict[str, str]:
         if not self._admin_token:
+            if not allow_login:
+                raise CrsApiError("CRS admin session required", status=401)
             self.login(save_token=True)
         return {"authorization": f"Bearer {self._admin_token}"}
 
@@ -230,9 +237,19 @@ class CrsHttpClient:
         path: str,
         *,
         payload: dict[str, Any] | None = None,
+        retry_auth: bool = True,
+        allow_login: bool = True,
     ) -> tuple[int, Any]:
-        status, parsed = self._request_json(method, path, payload=payload, headers=self._admin_headers())
-        if status == 401 and self._can_refresh_admin_token():
+        """Authenticate before sending; optionally renew/replay after a 401.
+
+        Non-replayable writes must pass ``retry_auth=False``. Set
+        ``allow_login=False`` to require an existing session and prohibit both
+        initial login and renewal. Legacy callers retain automatic login.
+        """
+        status, parsed = self._request_json(
+            method, path, payload=payload, headers=self._admin_headers(allow_login=allow_login),
+        )
+        if allow_login and retry_auth and status == 401 and self._can_refresh_admin_token():
             self.login(save_token=True)
             status, parsed = self._request_json(method, path, payload=payload, headers=self._admin_headers())
         return status, parsed
