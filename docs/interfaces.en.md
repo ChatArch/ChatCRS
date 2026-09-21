@@ -165,9 +165,9 @@ An explicit `--base-url` can select a reset backend when a configured relay does
 | `chatcrs codex reset consume` | `POST /wham/rate-limit-reset-credits/consume`; GET readback | `consume_reset_credit` |
 
 
-## CRS-managed Codex (Unreleased)
+## CRS-managed Codex (0.3.5)
 
-This managed client is **Unreleased** source functionality, **not included in 0.3.4**. Network operations require a CRS server with the native, Admin-authenticated routes below. Older servers without them fail closed: no fallback to local OAuth, cached statistics, or `reset-status`. This does not claim a server release or deployment.
+This managed client is introduced in **0.3.5**, and is **not included in 0.3.4**. Network operations require the native CRS routes below, authenticated by a scoped management Key or an existing Admin session. Older servers without these routes fail closed: no local OAuth, cached-statistics or `reset-status` fallback. Installing the client does not upgrade the CRS server.
 
 Every command requires `--account-id`. `--profile` defaults to `default` and selects the existing `CRS` ChatEnv namespace, never a `Codex` OAuth profile. It uses a scoped management Key (`CRS_API_KEY`, `crsm_` prefix) from the selected CRS profile, without reading Admin sessions, logging in or falling back. Operators without a Key must establish an Admin session separately with `chatcrs admin login --profile <profile> --save-token`; missing or rejected sessions fail without login, renewal or replay. Legacy Admin commands retain their defaults. It pins the server origin/account identity (`token_service="CRS"`) without copying upstream OAuth credentials. The thin CLI lazily calls `chatcrs.managed_codex.CrsManagedCodexClient.from_profile(crs_profile="default", account_id="account-placeholder", home=None, timeout=20)`. Python consumers use its `identity`, `token_service`, and methods directly, without shelling out to the CLI.
 

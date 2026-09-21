@@ -168,14 +168,14 @@ def test_legacy_cached_usage_is_not_redirected(adapter, monkeypatch):
 
 
 @pytest.mark.parametrize("path", ["README.md", "README.en.md", "docs/cli.md", "docs/cli.en.md", "docs/interfaces.md", "docs/interfaces.en.md"])
-def test_managed_docs_match_tree_and_unreleased_contract(path):
+def test_managed_docs_match_tree_and_release_contract(path):
     from pathlib import Path
     from chatstyle import render_click_tree
 
     text = (Path(__file__).resolve().parents[1] / path).read_text()
     block = text.split("```text", 1)[1].split("```", 1)[0].strip()
     assert block == render_click_tree(main, root_name="chatcrs")
-    assert "Unreleased" in text and "0.3.4" in text
+    assert "0.3.5" in text and "0.3.4" in text
     for command in ("usage", "credits", "consume", "operation"):
         assert f"chatcrs admin accounts codex {command}" in text
     assert "reset_verified" in text and "nothing_to_reset" in text and "no_credit" in text

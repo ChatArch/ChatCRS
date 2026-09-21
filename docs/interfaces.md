@@ -165,9 +165,9 @@ chatcrs codex reset consume --profile work --request-id one-reviewed-operation -
 | `chatcrs codex reset consume` | `POST /wham/rate-limit-reset-credits/consume`; GET readback | `consume_reset_credit` |
 
 
-## CRS 托管 Codex（Unreleased）
+## CRS 托管 Codex（0.3.5）
 
-此管理型客户端是 **Unreleased** 源码功能，**不包含在 0.3.4**。网络操作的前置条件是 CRS 服务端部署原生、受 Admin 鉴权保护的以下接口；旧服务器没有这些路由时会失败，不回退为本地 OAuth、缓存统计或 `reset-status`。这不是服务端已发布/已部署的承诺。
+此管理型客户端自 **0.3.5** 提供，**不包含在 0.3.4**。网络操作需要 CRS 服务端部署以下原生接口，并使用专用管理 Key 或既有 Admin 会话鉴权；旧服务器缺少路由时明确失败，不回退为本地 OAuth、缓存统计或 `reset-status`。安装客户端不会自动更新 CRS 服务端。
 
 所有命令必须指定 `--account-id`；`--profile` 默认 `default`，只选择既有 `CRS` ChatEnv namespace，绝不是 `Codex` OAuth profile。使用所选 CRS profile 的专用管理 Key（`CRS_API_KEY`，`crsm_` 前缀）；Key 模式不读 Admin 会话、不自动登录、不回退。未配置 Key 的操作员路径只使用已存在的 Admin 会话，缺失或被拒绝即失败；须另行运行 `chatcrs admin login --profile <profile> --save-token` 建立会话，旧 Admin 命令的默认行为不变。`token_service="CRS"`，固定服务 origin 与账号 identity，不复制上游 OAuth。CLI 仅延迟导入并调用 `chatcrs.managed_codex.CrsManagedCodexClient.from_profile(crs_profile="default", account_id="account-placeholder", home=None, timeout=20)`；Python 消费者直接使用该类的 `identity`、`token_service` 和下表方法，不要 shell out 到 CLI。
 
