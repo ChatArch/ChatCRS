@@ -52,6 +52,11 @@ chatcrs
 ├── --tree-brief  # Print the registered CLI tree without parameter signatures and exit.
 ├── admin  # Remote CRS administrator operations via HTTPS Admin API.
 │   ├── accounts  # Inspect or refresh remote CRS account state via HTTP Admin API.
+│   │   ├── codex  # CRS 托管 Codex 账号；需原生 Admin 接口。
+│   │   │   ├── consume [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID] [--credit-id CREDIT-ID] [--execute]  # 默认本地计划；显式执行消费，不自动重放。
+│   │   │   ├── credits [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 只读查询重置卡，不消费。
+│   │   │   ├── operation [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output] [--request-id REQUEST-ID]  # 读取历史回执；待定或未知状态退出非零。
+│   │   │   └── usage [--profile PROFILE] [--account-id ACCOUNT-ID] [--timeout TIMEOUT] [--json-output]  # 读取固定账号的实时上游额度；不是缓存统计。
 │   │   ├── refresh-status [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] <ACCOUNT-ID> [--execute] [--json-output]  # Reset a CRS OpenAI account status after transient failures.
 │   │   └── usage [--profile PROFILE] [--base-url BASE-URL] [--api-key API-KEY] [--username USERNAME] [--password PASSWORD] [--admin-token ADMIN-TOKEN] [--timeout TIMEOUT] [--json-output]  # List OpenAI/Codex account usage and scheduling metadata.
 │   ├── keys  # Inspect remote CRS API keys with admin privileges.
@@ -177,3 +182,28 @@ chatcrs codex reset consume --profile work --request-id one-reviewed-operation -
 ```
 
 An explicit `--base-url` can select a reset backend when a configured relay does not expose reset routes; it does not change the profile usage/auth base or stored config. These are evolving ChatGPT backend endpoints, not a stable public OpenAI Platform API. Python consumers use `chatcrs.reset_credits.CodexResetClient`, `inspect_reset_credits`, and `consume_reset_credit`. Client `consume(..., execute=True)` requires caller-owned policy and durable de-duplication; ChatGlance threshold policy stays outside ChatCRS.
+
+
+## CRS-managed Codex (0.3.5)
+
+This managed client is introduced in **0.3.5**, and is **not included in 0.3.4**. Network operations require the native CRS routes below, authenticated by a scoped management Key or an existing Admin session. Older servers without these routes fail closed: no local OAuth, cached-statistics or `reset-status` fallback. Installing the client does not upgrade the CRS server.
+
+Every command requires `--account-id`. `--profile` defaults to `default` and selects the existing `CRS` ChatEnv namespace, never a `Codex` OAuth profile. It pins the server origin/account identity (`token_service="CRS"`) without copying upstream OAuth credentials. Dashboards should use a dedicated management Key (`CRS_API_KEY`, `crsm_` prefix) in the selected CRS profile: Key mode never reads an Admin session or falls back to username/password login, including after rejection. Without a Key, operator calls use an already-established CRS Admin session only; missing or rejected sessions fail without login, renewal or replay. Establish a session separately with `chatcrs admin login --profile <profile> --save-token`. Legacy Admin commands keep their normal login lifecycle; ordinary model Keys are not accepted. The thin CLI lazily calls `chatcrs.managed_codex.CrsManagedCodexClient.from_profile(crs_profile="default", account_id="account-placeholder", home=None, timeout=20)`. Python consumers use its `identity`, `token_service`, and methods directly, without shelling out to the CLI.
+
+| CLI | Native CRS route (server prerequisite) | Python method / mutation boundary |
+|---|---|---|
+| `chatcrs admin accounts codex usage` | `GET /admin/openai-accounts/{account_id}/codex/usage` | `usage()`; fresh upstream windows, read-only |
+| `chatcrs admin accounts codex credits` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits` | `reset_credits()`; read-only, never consumes |
+| `chatcrs admin accounts codex consume` | `POST /admin/openai-accounts/{account_id}/codex/reset-credits/consume` | `consume(request_id, credit_id=None, execute=False)`; local network-free dry-run by default |
+| `chatcrs admin accounts codex operation` | `GET /admin/openai-accounts/{account_id}/codex/reset-credits/operations/{request_id}` | `operation(request_id)`; read-only historical receipt |
+
+```bash
+chatcrs admin accounts codex usage --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex credits --profile crs-profile --account-id account-placeholder --json-output
+chatcrs admin accounts codex consume --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+chatcrs admin accounts codex operation --profile crs-profile --account-id account-placeholder --request-id request-placeholder --json-output
+```
+
+`consume` and `operation` require `--request-id`; consumption optionally accepts `--credit-id credit-placeholder`. Add `--execute` only after reviewing the target and persist the same request ID. Each CLI invocation calls the adapter method once: no automatic replay or new ID. Inspect an uncertain receipt with the original ID instead of blindly consuming again.
+
+`--json-output` emits the adapter's safe structured JSON. Exceptions produce fixed safe errors and nonzero exits, never raw exceptions or credentials. A local `dry_run` exits 0. Executed consumption and historical receipts exit 0 only for `reset_verified`, `nothing_to_reset`, or `no_credit` (the latter two do not mean a credit was consumed). `uncertain`, `pending`, unknown states, HTTP 202, and exceptions are not success and exit nonzero. Historical unknown receipt states may be displayed but are not fresh quota verification. Existing `chatcrs admin accounts usage` keeps its cached CRS statistics semantics.
